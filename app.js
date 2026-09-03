@@ -93,7 +93,11 @@
     };
     try {
       localStorage.setItem("mlb-tr-explorer", JSON.stringify(o));
-      history.replaceState(null, "", "#" + encodeURIComponent(JSON.stringify(o)));
+      // Keep the public URL short — filters live in localStorage, not the hash.
+      // Still *read* a hash on load so old shared links work.
+      if (location.hash) {
+        history.replaceState(null, "", location.pathname + location.search);
+      }
     } catch (_) {}
   }
 
