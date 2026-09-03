@@ -30,6 +30,7 @@
     todayOnly: false,
     yearLo: 2021,
     yearHi: 2026,
+    rdSurplusDog: false,
   };
 
   const $ = (sel, el = document) => el.querySelector(sel);
@@ -57,6 +58,7 @@
       if (o.scatterSit) state.scatterSit = o.scatterSit;
       if (o.scatterMode) state.scatterMode = o.scatterMode;
       if (typeof o.todayOnly === "boolean") state.todayOnly = o.todayOnly;
+      if (typeof o.rdSurplusDog === "boolean") state.rdSurplusDog = o.rdSurplusDog;
       if (typeof o.yearLo === "number") state.yearLo = o.yearLo;
       if (typeof o.yearHi === "number") state.yearHi = o.yearHi;
       if (o.baselineWindow && typeof o.yearLo !== "number") {
@@ -85,6 +87,7 @@
       scatterSit: state.scatterSit,
       scatterMode: state.scatterMode,
       todayOnly: state.todayOnly,
+      rdSurplusDog: state.rdSurplusDog,
       yearLo: state.yearLo,
       yearHi: state.yearHi,
     };
@@ -191,10 +194,30 @@
     );
   }
 
+  function gamesPlayed(t) {
+    const w = t.W || 0, l = t.L || 0;
+    return w + l;
+  }
+
+  function rdPerGame(t) {
+    const gp = gamesPlayed(t);
+    if (!gp || t.DIFF == null) return null;
+    return t.DIFF / gp;
+  }
+
+  function isRdSurplusDog(t) {
+    const rd = rdPerGame(t);
+    if (rd == null || rd <= 0) return false;
+    const g = slateForTeam(t.abbr);
+    if (g) return g.dog_abbr === t.abbr && g.home_abbr === t.abbr;
+    return false;
+  }
+
   function filteredTeams() {
     return state.data.teams.filter((t) => {
       if (!(teamPassesStreak(t) && teamPassesL10(t) && teamPassesSearch(t))) return false;
       if (state.todayOnly && !slateForTeam(t.abbr)) return false;
+      if (state.rdSurplusDog && !isRdSurplusDog(t)) return false;
       return true;
     });
   }
@@ -598,8 +621,37 @@
     return todaysSituationsForTeam(abbr).has(sc);
   }
 
+
+  function rowFilterTag(r) {
+    const tags = [];
+    const sc = r.sit.sc;
+    if (state.category === "ats" && (sc === "is_away_dog" || sc === "is_home_dog" || sc === "is_dog")) {
+      tags.push("ATS dog");
+    }
+    if (state.rdSurplusDog && isRdSurplusDog(r.team)) tags.push("home dog + RD>0 (2026 snapshot)");
+    if (!tags.length) return "";
+    return ` <span style="color:var(--muted);font-size:0.7rem">according to ${tags.join(" + ")}</span>`;
+  }
+
+  function accordingToLine() {
+    const cat = CAT_LABEL[state.category] || state.category;
+    const sits = enabledSituations().map((s) => s.label.replace(/^As /, ""));
+    const { lo, hi } = yearRange();
+    const bits = [];
+    if (sits.length && sits.length <= 6) bits.push(sits.join(", "));
+    else if (sits.length) bits.push(`${sits.length} situations`);
+    bits.push(cat);
+    bits.push(`baseline ${lo}–${hi}`);
+    if (state.todayOnly) bits.push("today’s slate only");
+    if (state.rdSurplusDog) bits.push("home ATS dog AND RD/G>0 (2026 ESPN snapshot, look-ahead)");
+    if (state.vsBaseline) bits.push("vs baseline");
+    return "According to " + bits.join(" · ");
+  }
+
   function renderList() {
     const wrap = $("#list-table");
+    const acc = $("#according-to");
+    if (acc) acc.textContent = accordingToLine();
     let rows = matchingRows();
 
     const colAccessors = {
@@ -669,7 +721,7 @@
         <td><strong>${r.team.abbr}</strong> <span style="color:var(--muted)">${r.team.name}</span></td>
         <td>${streakBadge(r.team.STRK)}</td>
         <td class="num">${r.team.L10}</td>
-        <td>${r.sit.label}</td>
+        <td>${r.sit.label}${rowFilterTag(r)}</td>
         <td class="num">${r.cell.record || "—"}</td>
         <td class="num">${r.cell.pct}%</td>
         <td class="num">${r.cell.n ?? "—"}</td>
@@ -981,6 +1033,10 @@
       state.todayOnly = e.target.checked;
       renderAll();
     });
+    $("#rd-surplus-dog").addEventListener("change", (e) => {
+      state.rdSurplusDog = e.target.checked;
+      renderAll();
+    });
     $("#search").addEventListener("input", (e) => {
       state.search = e.target.value;
       renderAll();
@@ -1039,6 +1095,7 @@
     $("#min-l10-val").textContent = state.minL10Wins === 0 ? "any" : state.minL10Wins;
     $("#max-l10-val").textContent = state.maxL10Wins === 10 ? "any" : state.maxL10Wins;
     $("#today-only").checked = state.todayOnly;
+    $("#rd-surplus-dog").checked = state.rdSurplusDog;
     $("#scatter-mode").value = state.scatterMode;
     $("#scatter-sit-wrap").style.display = state.scatterMode === "win_cover" ? "" : "none";
     $("#scatter-xy-wrap").style.display = state.scatterMode === "situations" ? "" : "none";

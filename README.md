@@ -2,6 +2,6 @@
 
 Interactive TeamRankings win / ATS / over-under situation board vs ESPN standings.
 
-Open the GitHub Pages URL for this repo (Settings → Pages, or the environment URL after the first deploy).
+**Live:** https://christophergier-beep.github.io/mlb-situation-explorer/
 
-This is a static snapshot. Data is not live odds.
+Static snapshot. Baseline years are a From/To picker (default 2021–2026). Filtered list shows “according to” the situations and optional home-dog + RD/G>0 (2026 ESPN snapshot, look-ahead).
