@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MLB TeamRankings Situation Explorer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;650&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <h1>MLB Situation Explorer</h1>
+        <div class="sub">TeamRankings win / ATS / O-U trends × ESPN standings. Toggle situations & streaks to find teams in the spots that matter.</div>
+      </div>
+
+      <div class="control-block">
+        <h3>Category</h3>
+        <div class="seg">
+          <button type="button" data-cat="win" class="active">Win%</button>
+          <button type="button" data-cat="ats">Cover%</button>
+          <button type="button" data-cat="ou">Over%</button>
+        </div>
+      </div>
+
+      <div class="control-block">
+        <h3>Situations</h3>
+        <div class="preset-row">
+          <button type="button" data-preset="all">All</button>
+          <button type="button" data-preset="none">Clear all</button>
+          <button type="button" data-preset="dogs">Dogs</button>
+          <button type="button" data-preset="favs">Favs</button>
+          <button type="button" data-preset="location">Location</button>
+          <button type="button" data-preset="rest">Rest</button>
+        </div>
+        <div class="sit-list" id="sit-list"></div>
+      </div>
+
+      <div class="control-block">
+        <h3>Streak filters</h3>
+        <div class="row">
+          <label>Min W streak</label>
+          <input type="range" id="min-w-streak" min="0" max="8" value="0" />
+          <span class="val" id="min-w-val">any</span>
+        </div>
+        <div class="row">
+          <label>Min L streak</label>
+          <input type="range" id="min-l-streak" min="0" max="8" value="0" />
+          <span class="val" id="min-l-val">any</span>
+        </div>
+        <label class="toggle"><input type="checkbox" id="include-w" checked /> Include winning-streak teams</label>
+        <label class="toggle"><input type="checkbox" id="include-l" checked /> Include losing-streak teams</label>
+      </div>
+
+      <div class="control-block">
+        <h3>Last 10</h3>
+        <div class="preset-row">
+          <button type="button" data-l10="any">Any</button>
+          <button type="button" data-l10="hot">Hot (7+)</button>
+          <button type="button" data-l10="even">Even (4–6)</button>
+          <button type="button" data-l10="cold">Cold (≤3)</button>
+        </div>
+        <div class="row">
+          <label>Min L10 wins</label>
+          <input type="range" id="min-l10" min="0" max="10" value="0" />
+          <span class="val" id="min-l10-val">any</span>
+        </div>
+        <div class="row">
+          <label>Max L10 wins</label>
+          <input type="range" id="max-l10" min="0" max="10" value="10" />
+          <span class="val" id="max-l10-val">any</span>
+        </div>
+      </div>
+
+      <div class="control-block">
+        <h3>Sample & threshold</h3>
+        <div class="row">
+          <label>Min N</label>
+          <input type="range" id="min-n" min="0" max="80" value="20" />
+          <span class="val" id="min-n-val">20</span>
+        </div>
+        <div class="row">
+          <label>Min pct / edge</label>
+          <input type="range" id="min-pct" min="-20" max="80" value="0" />
+          <span class="val" id="min-pct-val">0</span>
+        </div>
+        <label class="toggle"><input type="checkbox" id="vs-baseline" /> Vs baseline (color/filter by edge)</label>
+        <div class="row" style="margin-top:8px">
+          <label>From</label>
+          <select id="year-lo"></select>
+        </div>
+        <div class="row">
+          <label>To</label>
+          <select id="year-hi"></select>
+        </div>
+        <div class="preset-row" style="margin-top:6px">
+          <button type="button" data-years="last5">Last 5</button>
+          <button type="button" data-years="last10">Last 10</button>
+          <button type="button" data-years="all">All</button>
+        </div>
+        <div class="sub" id="year-span" style="margin-top:6px;font-size:11px;color:var(--muted);line-height:1.35">
+          Edge vs pooled TeamRankings rate in the years you pick.
+        </div>
+      </div>
+
+      <div class="control-block">
+        <h3>Today’s slate</h3>
+        <label class="toggle"><input type="checkbox" id="today-only" /> Only situations true for today’s games</label>
+        <div class="sub" style="margin-top:6px;font-size:11px;color:var(--muted);line-height:1.35">
+          When on, the filtered list (and heat/scatter) keep home/away, fav/dog, combo, after win/loss, and all-games only if that team’s role matches today’s DK board.
+        </div>
+      </div>
+
+      <div class="control-block">
+        <h3>Search</h3>
+        <input type="search" id="search" placeholder="Team name or abbr…" />
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <div class="tabs">
+          <button type="button" data-tab="heat" class="active">Heat map</button>
+          <button type="button" data-tab="scatter">Scatter</button>
+          <button type="button" data-tab="list">Filtered list</button>
+          <button type="button" data-tab="today">Today finder</button>
+        </div>
+        <div class="stats-pill">
+          <span id="stat-cat">Win%</span>
+          <span id="stat-teams">— teams</span>
+          <span id="stat-rows">— cells</span>
+          <span id="stat-n">min N 20</span>
+        </div>
+      </div>
+
+      <div class="detail-bar" id="detail-bar">
+        <div id="detail-text"></div>
+        <button type="button" id="unpin">Unpin</button>
+      </div>
+
+      <section class="panel view-panel" data-view="heat">
+        <div class="panel-title">
+          <h2>Heat map</h2>
+          <span class="hint">Rows = teams · columns = situations · click a row to pin</span>
+        </div>
+        <div id="heat-chart" class="chart"></div>
+      </section>
+
+      <section class="panel view-panel hidden" data-view="scatter">
+        <div class="panel-title">
+          <h2>Scatter</h2>
+          <span class="hint">Point size ~ sample size · color by streak (win/cover mode) or DIFF</span>
+        </div>
+        <div class="scatter-controls">
+          <div class="field">
+            <span>Mode</span>
+            <select id="scatter-mode">
+              <option value="situations">Situation A vs B (same category)</option>
+              <option value="win_cover">Win% vs Cover% (one situation)</option>
+            </select>
+          </div>
+          <div id="scatter-xy-wrap" style="display:contents">
+            <div class="field">
+              <span>X situation</span>
+              <select id="scatter-x"></select>
+            </div>
+            <div class="field">
+              <span>Y situation</span>
+              <select id="scatter-y"></select>
+            </div>
+          </div>
+          <div class="field" id="scatter-sit-wrap" style="display:none">
+            <span>Situation</span>
+            <select id="scatter-sit"></select>
+          </div>
+        </div>
+        <div id="scatter-chart" class="chart"></div>
+      </section>
+
+      <section class="panel view-panel hidden" data-view="list">
+        <div class="panel-title">
+          <h2>Filtered list</h2>
+          <span class="hint" id="list-count">0 rows</span>
+        </div>
+        <div id="list-table"></div>
+      </section>
+
+      <section class="panel" id="today-panel">
+        <div class="panel-title">
+          <h2>Today’s slate <span id="today-date" style="color:var(--muted);font-weight:500"></span></h2>
+          <span class="hint">DK dog / fav vs strong TR home-dog or away-dog · triples when ESPN also favors the dog</span>
+        </div>
+        <div class="slate-grid" id="today-grid"></div>
+      </section>
+
+      <!-- duplicate today as tab view -->
+      <section class="panel view-panel hidden" data-view="today">
+        <div class="panel-title">
+          <h2>Today finder</h2>
+          <span class="hint">DK dog vs strong TR home/away dog · triples when ESPN favors the dog</span>
+        </div>
+        <div class="slate-grid" id="today-tab-grid"></div>
+      </section>
+
+      <footer>
+        <div id="meta-line"></div>
+        <p style="margin:8px 0 0">
+          Data from TeamRankings scrape + ESPN standings on disk. O/U situations are historically noisy; rest / after-win filters historically weak.
+          Historical baselines are pooled TeamRankings situation rates; default window 2021–2026 (switch in the sidebar). Durable edges (ATS dogs, home favs) barely move vs 2007–2026.
+          Filter state saved to URL hash + localStorage. Regenerate with <code>python3 build_data.py</code>.
+        </p>
+      </footer>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
