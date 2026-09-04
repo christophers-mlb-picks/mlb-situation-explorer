@@ -347,3 +347,9 @@ footer {
   border-top: 1px solid var(--border);
   padding-top: 14px;
 }
+
+.badge.il { color: #ff8fab; border-color: rgba(255,143,171,0.45); background: rgba(255,143,171,0.1); }
+.badge.wx { color: #7ec8ff; border-color: rgba(126,200,255,0.45); background: rgba(126,200,255,0.1); }
+.badge.sa { color: #c4b5fd; border-color: rgba(196,181,253,0.45); background: rgba(196,181,253,0.1); max-width: 100%; white-space: normal; text-align: left; }
+.badge.poff { color: #f5a524; border-color: rgba(245,165,36,0.45); background: rgba(245,165,36,0.1); }
+.badge-row { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 2px; }

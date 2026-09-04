@@ -31,6 +31,14 @@
     yearLo: 2021,
     yearHi: 2026,
     rdSurplusDog: false,
+    poffClinched: false,
+    poffMustChase: false,
+    poffDeadMoney: false,
+    confirmedIl: false,
+    wxIndoor: false,
+    wxHot: false,
+    wxPrecip: false,
+    starterAdjGap: false,
   };
 
   const $ = (sel, el = document) => el.querySelector(sel);
@@ -59,6 +67,14 @@
       if (o.scatterMode) state.scatterMode = o.scatterMode;
       if (typeof o.todayOnly === "boolean") state.todayOnly = o.todayOnly;
       if (typeof o.rdSurplusDog === "boolean") state.rdSurplusDog = o.rdSurplusDog;
+      if (typeof o.poffClinched === "boolean") state.poffClinched = o.poffClinched;
+      if (typeof o.poffMustChase === "boolean") state.poffMustChase = o.poffMustChase;
+      if (typeof o.poffDeadMoney === "boolean") state.poffDeadMoney = o.poffDeadMoney;
+      if (typeof o.confirmedIl === "boolean") state.confirmedIl = o.confirmedIl;
+      if (typeof o.wxIndoor === "boolean") state.wxIndoor = o.wxIndoor;
+      if (typeof o.wxHot === "boolean") state.wxHot = o.wxHot;
+      if (typeof o.wxPrecip === "boolean") state.wxPrecip = o.wxPrecip;
+      if (typeof o.starterAdjGap === "boolean") state.starterAdjGap = o.starterAdjGap;
       if (typeof o.yearLo === "number") state.yearLo = o.yearLo;
       if (typeof o.yearHi === "number") state.yearHi = o.yearHi;
       if (o.baselineWindow && typeof o.yearLo !== "number") {
@@ -88,6 +104,14 @@
       scatterMode: state.scatterMode,
       todayOnly: state.todayOnly,
       rdSurplusDog: state.rdSurplusDog,
+      poffClinched: state.poffClinched,
+      poffMustChase: state.poffMustChase,
+      poffDeadMoney: state.poffDeadMoney,
+      confirmedIl: state.confirmedIl,
+      wxIndoor: state.wxIndoor,
+      wxHot: state.wxHot,
+      wxPrecip: state.wxPrecip,
+      starterAdjGap: state.starterAdjGap,
       yearLo: state.yearLo,
       yearHi: state.yearHi,
     };
@@ -217,11 +241,82 @@
     return false;
   }
 
+  function anyPoffFilter() {
+    return state.poffClinched || state.poffMustChase || state.poffDeadMoney;
+  }
+
+  function teamPassesPlayoff(t) {
+    if (!anyPoffFilter()) return true;
+    const tag = t.playoff_tag || "";
+    if (state.poffClinched && tag === "clinched") return true;
+    if (state.poffMustChase && tag === "must_chase") return true;
+    if (state.poffDeadMoney && tag === "dead_money") return true;
+    return false;
+  }
+
+  function gameHasConfirmedIl(g) {
+    const inj = g?.injury;
+    if (!inj) return false;
+    // Locked: use toggle_match only — NOT any IL length > 0
+    return !!inj.toggle_match;
+  }
+
+  function gamePassesWeather(g) {
+    const any = state.wxIndoor || state.wxHot || state.wxPrecip;
+    if (!any) return true;
+    const w = g?.weather;
+    if (!w) return false;
+    if (state.wxIndoor && w.indoor) return true;
+    if (state.wxHot && w.hot_outdoor) return true;
+    if (state.wxPrecip && w.precip_risk) return true;
+    return false;
+  }
+
+  function gamePassesStarterAdj(g) {
+    if (!state.starterAdjGap) return true;
+    const gap = g?.starter_adjustment?.starter_adj_gap;
+    return gap != null && Math.abs(gap) >= 2;
+  }
+
+  function gamePassesSlateScreens(g) {
+    if (!g) return false;
+    if (state.confirmedIl && !gameHasConfirmedIl(g)) return false;
+    if (!gamePassesWeather(g)) return false;
+    if (!gamePassesStarterAdj(g)) return false;
+    return true;
+  }
+
+  function anyGameSlateFilter() {
+    return state.confirmedIl || state.wxIndoor || state.wxHot || state.wxPrecip || state.starterAdjGap;
+  }
+
   function filteredTeams() {
     return state.data.teams.filter((t) => {
       if (!(teamPassesStreak(t) && teamPassesL10(t) && teamPassesSearch(t))) return false;
       if (state.todayOnly && !slateForTeam(t.abbr)) return false;
       if (state.rdSurplusDog && !isRdSurplusDog(t)) return false;
+      if (!teamPassesPlayoff(t)) return false;
+      if (anyGameSlateFilter()) {
+        const g = slateForTeam(t.abbr);
+        if (!gamePassesSlateScreens(g)) return false;
+      }
+      return true;
+    });
+  }
+
+  function filteredSlateGames() {
+    const games = state.data.slate?.games || [];
+    return games.filter((g) => {
+      if (anyPoffFilter()) {
+        const home = state.data.teams.find((t) => t.abbr === g.home_abbr);
+        const away = state.data.teams.find((t) => t.abbr === g.away_abbr);
+        if (!((home && teamPassesPlayoff(home)) || (away && teamPassesPlayoff(away)))) return false;
+      }
+      if (state.rdSurplusDog) {
+        const home = state.data.teams.find((t) => t.abbr === g.home_abbr);
+        if (!home || !isRdSurplusDog(home)) return false;
+      }
+      if (anyGameSlateFilter() && !gamePassesSlateScreens(g)) return false;
       return true;
     });
   }
@@ -633,6 +728,12 @@
       tags.push("ATS dog");
     }
     if (state.rdSurplusDog && isRdSurplusDog(r.team)) tags.push("home dog + RD>0 (2026 snapshot)");
+    if (state.poffClinched && r.team.playoff_tag === "clinched") tags.push("clinched (2026 ESPN snapshot / look-ahead)");
+    if (state.poffMustChase && r.team.playoff_tag === "must_chase") tags.push("must-chase (2026 ESPN snapshot / look-ahead)");
+    if (state.poffDeadMoney && r.team.playoff_tag === "dead_money") tags.push("dead money (2026 ESPN snapshot / look-ahead)");
+    if (state.confirmedIl) tags.push("recent IL / SP on IL (official, 40-man)");
+    if (state.wxIndoor || state.wxHot || state.wxPrecip) tags.push("ESPN weather screen");
+    if (state.starterAdjGap) tags.push("starter-adj gap (ESPN predictor — not a backtested trend)");
     if (!tags.length) return "";
     return ` <span style="color:var(--muted);font-size:0.7rem">according to ${tags.join(" + ")}</span>`;
   }
@@ -648,6 +749,14 @@
     bits.push(`baseline ${lo}–${hi}`);
     if (state.todayOnly) bits.push("today’s slate only");
     if (state.rdSurplusDog) bits.push("home ATS dog AND RD/G>0 (2026 ESPN snapshot, look-ahead)");
+    if (state.poffClinched) bits.push("clinched / locked (2026 ESPN snapshot / look-ahead)");
+    if (state.poffMustChase) bits.push("must-chase (2026 ESPN snapshot / look-ahead)");
+    if (state.poffDeadMoney) bits.push("dead money (2026 ESPN snapshot / look-ahead)");
+    if (state.confirmedIl) bits.push("recent IL / SP on IL (official, 40-man — 7d placed-on-IL txs or probable SP on IL; dialed from 14d)");
+    if (state.wxIndoor) bits.push("dome/indoor (ESPN)");
+    if (state.wxHot) bits.push("hot outdoor ≥90° (ESPN)");
+    if (state.wxPrecip) bits.push("precip/storm risk (ESPN)");
+    if (state.starterAdjGap) bits.push("starter-adj |Δ|≥2 (ESPN predictor — not a backtested trend)");
     if (state.vsBaseline) bits.push("vs baseline");
     return "According to " + bits.join(" · ");
   }
@@ -717,7 +826,8 @@
           const wp =
             g.home_abbr === r.team.abbr ? g.espn_home_wp : g.espn_away_wp;
           const trip = g.triple ? ' <span class="badge triple">TRIPLE</span>' : "";
-          slateCell = `${g.name} · ${role} ${ml || ""} · ESPN ${wp != null ? wp.toFixed(1) + "%" : "—"}${trip}`;
+          const v12 = v12Badges(g);
+          slateCell = `${g.name} · ${role} ${ml || ""} · ESPN ${wp != null ? wp.toFixed(1) + "%" : "—"}${trip}${v12 ? " " + v12 : ""}`;
         }
       }
       const pin = state.pinned === r.team.abbr ? "pinned" : "";
@@ -753,6 +863,65 @@
     });
   }
 
+  function formatNotedIl(list, side) {
+    if (!list?.length) return "";
+    const names = list
+      .slice(0, 4)
+      .map((e) => `${e.name}${e.code ? " (" + e.code + ")" : ""}`)
+      .join(", ");
+    const more = list.length > 4 ? ` +${list.length - 4}` : "";
+    return `<span class="badge il" title="${list
+      .map((e) => `${e.name} ${e.code}: ${e.note || ""}`)
+      .join(" | ")
+      .replace(/"/g, "&quot;")}">${side} IL noted: ${names}${more}</span>`;
+  }
+
+  function v12Badges(g) {
+    const bits = [];
+    const inj = g.injury;
+    if (inj) {
+      // Badge: 40-man IL with notes (non-screening). Chronic D60 included here.
+      const hn = formatNotedIl(inj.home_il_noted || [], g.home_abbr || "HOME");
+      const an = formatNotedIl(inj.away_il_noted || [], g.away_abbr || "AWAY");
+      if (an) bits.push(an);
+      if (hn) bits.push(hn);
+      if (inj.home_sp_on_il || inj.away_sp_on_il) {
+        const who = [
+          inj.away_sp_on_il ? inj.away_sp_name : null,
+          inj.home_sp_on_il ? inj.home_sp_name : null,
+        ]
+          .filter(Boolean)
+          .join(" / ");
+        bits.push(`<span class="badge il">SP IL${who ? ": " + who : ""}</span>`);
+      }
+      if (inj.toggle_match && (inj.recent_il_placements?.length || 0) > 0) {
+        const n = inj.recent_il_placements.length;
+        bits.push(`<span class="badge il" title="7d placed-on-IL (dialed from 14d)">Recent IL×${n}</span>`);
+      }
+    }
+    const w = g.weather;
+    if (w) {
+      if (w.indoor) bits.push(`<span class="badge wx">Dome</span>`);
+      if (w.hot_outdoor) bits.push(`<span class="badge wx">Hot ≥90°</span>`);
+      if (w.precip_risk) bits.push(`<span class="badge wx">Precip</span>`);
+      else if (!w.indoor && w.temp_f != null) bits.push(`<span class="badge wx">${Math.round(w.temp_f)}°</span>`);
+    }
+    const sa = g.starter_adjustment;
+    if (sa && sa.starter_adj_gap != null) {
+      const d = sa.starter_adj_gap;
+      const sign = d > 0 ? "+" : "";
+      bits.push(`<span class="badge sa" title="ESPN predictor — not a backtested trend">starter adj Δ${sign}${d.toFixed(1)} (ESPN predictor — not a backtested trend)</span>`);
+    }
+    const home = state.data.teams.find((t) => t.abbr === g.home_abbr);
+    const away = state.data.teams.find((t) => t.abbr === g.away_abbr);
+    for (const t of [away, home]) {
+      if (!t?.playoff_tag) continue;
+      const label = t.playoff_tag === "clinched" ? "Clinched" : t.playoff_tag === "must_chase" ? "Must-chase" : "Dead $";
+      bits.push(`<span class="badge poff">${t.abbr} ${label}</span>`);
+    }
+    return bits.join(" ");
+  }
+
   function renderToday() {
     const panel = $("#today-panel");
     const el = $("#today-grid");
@@ -764,10 +933,12 @@
     panel.classList.remove("hidden");
     $("#today-date").textContent = slate.date || "latest";
 
+    const games = filteredSlateGames();
+
     // Highlight games where dog matches strong TR home/away dog cell
     const strong = [];
     const others = [];
-    for (const g of slate.games) {
+    for (const g of games) {
       const sc = g.sc || (g.dog_side === "home" ? "is_home_dog" : "is_away_dog");
       const abbr = g.dog_abbr;
       const winC = abbr ? cell(abbr, sc, "win") : null;
@@ -791,6 +962,7 @@
         winEdge == null ? "" : `<span class="${winEdge >= 0 ? "edge-pos" : "edge-neg"}">${winEdge >= 0 ? "+" : ""}${winEdge}pp win</span>`;
       const ce =
         coverEdge == null ? "" : `<span class="${coverEdge >= 0 ? "edge-pos" : "edge-neg"}">${coverEdge >= 0 ? "+" : ""}${coverEdge}pp cover</span>`;
+      const badges = v12Badges(g);
       return `<div class="game-card ${isStrong || g.triple ? "hit" : ""}">
         <div class="matchup"><span>${g.name}</span>${trip}</div>
         <div class="meta">
@@ -798,6 +970,7 @@
           ESPN WP ${g.away_abbr} ${g.espn_away_wp != null ? g.espn_away_wp.toFixed(1) : "—"}% · ${g.home_abbr} ${g.espn_home_wp != null ? g.espn_home_wp.toFixed(1) : "—"}%<br>
           Dog: <strong>${g.dog_abbr || "—"}</strong> (${g.dog_side || "—"}) ${g.dog_ml || ""} · sit ${sc || "—"}
         </div>
+        ${badges ? `<div class="badge-row">${badges}</div>` : ""}
         <div class="tr-line">
           TR ${g.dog_abbr || ""} ${sc || ""}:<br>
           Win ${winC ? `${winC.pct}% (${winC.record}, n=${winC.n})` : "—"} ${we}<br>
@@ -806,15 +979,19 @@
       </div>`;
     };
 
-    el.innerHTML =
-      (strong.length
-        ? `<div style="grid-column:1/-1;color:var(--warn);font-size:0.8rem;margin-bottom:4px;">Strong / triple matches (${strong.length})</div>` +
-          strong.map(renderCard).join("")
-        : "") +
-      (others.length
-        ? `<div style="grid-column:1/-1;color:var(--muted);font-size:0.8rem;margin:8px 0 4px;">Rest of slate (${others.length})</div>` +
-          others.map(renderCard).join("")
-        : "");
+    if (!games.length) {
+      el.innerHTML = '<div class="empty" style="grid-column:1/-1">No slate games match the V1.2 look-ahead / official screens.</div>';
+    } else {
+      el.innerHTML =
+        (strong.length
+          ? `<div style="grid-column:1/-1;color:var(--warn);font-size:0.8rem;margin-bottom:4px;">Strong / triple matches (${strong.length})</div>` +
+            strong.map(renderCard).join("")
+          : "") +
+        (others.length
+          ? `<div style="grid-column:1/-1;color:var(--muted);font-size:0.8rem;margin:8px 0 4px;">Rest of slate (${others.length})</div>` +
+            others.map(renderCard).join("")
+          : "");
+    }
     const tabHost = $("#today-tab-grid");
     if (tabHost) tabHost.innerHTML = el.innerHTML;
   }
@@ -1041,6 +1218,22 @@
       state.rdSurplusDog = e.target.checked;
       renderAll();
     });
+    const bindToggle = (id, key) => {
+      const el = $("#" + id);
+      if (!el) return;
+      el.addEventListener("change", (e) => {
+        state[key] = e.target.checked;
+        renderAll();
+      });
+    };
+    bindToggle("poff-clinched", "poffClinched");
+    bindToggle("poff-must-chase", "poffMustChase");
+    bindToggle("poff-dead-money", "poffDeadMoney");
+    bindToggle("confirmed-il", "confirmedIl");
+    bindToggle("wx-indoor", "wxIndoor");
+    bindToggle("wx-hot", "wxHot");
+    bindToggle("wx-precip", "wxPrecip");
+    bindToggle("starter-adj-gap", "starterAdjGap");
     $("#search").addEventListener("input", (e) => {
       state.search = e.target.value;
       renderAll();
@@ -1100,6 +1293,15 @@
     $("#max-l10-val").textContent = state.maxL10Wins === 10 ? "any" : state.maxL10Wins;
     $("#today-only").checked = state.todayOnly;
     $("#rd-surplus-dog").checked = state.rdSurplusDog;
+    const setChk = (id, v) => { const el = $("#" + id); if (el) el.checked = v; };
+    setChk("poff-clinched", state.poffClinched);
+    setChk("poff-must-chase", state.poffMustChase);
+    setChk("poff-dead-money", state.poffDeadMoney);
+    setChk("confirmed-il", state.confirmedIl);
+    setChk("wx-indoor", state.wxIndoor);
+    setChk("wx-hot", state.wxHot);
+    setChk("wx-precip", state.wxPrecip);
+    setChk("starter-adj-gap", state.starterAdjGap);
     $("#scatter-mode").value = state.scatterMode;
     $("#scatter-sit-wrap").style.display = state.scatterMode === "win_cover" ? "" : "none";
     $("#scatter-xy-wrap").style.display = state.scatterMode === "situations" ? "" : "none";

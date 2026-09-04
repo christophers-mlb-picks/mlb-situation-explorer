@@ -115,6 +115,31 @@
           Today-only: keep home/away/fav/dog/after W-L if that role is true on today’s DK board.
           Home dog + RD/G>0: today’s DK home underdog with season ESPN DIFF/(W+L) > 0. 2026 snapshot, look-ahead — a screen, not an out-of-sample edge.
         </div>
+        <h3 style="margin-top:12px">Playoff race <span style="font-weight:500;color:var(--muted)">(look-ahead)</span></h3>
+        <label class="toggle"><input type="checkbox" id="poff-clinched" /> Clinched / locked (POFF≥99%)</label>
+        <label class="toggle"><input type="checkbox" id="poff-must-chase" /> Must-chase (POFF 5–40% or GB≤3)</label>
+        <label class="toggle"><input type="checkbox" id="poff-dead-money" /> Dead money (POFF&lt;1% and GB≥15)</label>
+        <div class="sub" style="margin-top:4px;font-size:11px;color:var(--muted);line-height:1.35">
+          2026 ESPN snapshot / look-ahead — filters teams by current POFF/GB. No historical hit rate.
+        </div>
+        <h3 style="margin-top:12px">Injury <span style="font-weight:500;color:var(--muted)">(official, 40-man)</span></h3>
+        <label class="toggle"><input type="checkbox" id="confirmed-il" /> Recent IL / SP on IL (official, 40-man)</label>
+        <div class="sub" style="margin-top:4px;font-size:11px;color:var(--muted);line-height:1.35">
+          Screen: 7-day “placed on … injured list” transaction for either club (dialed from locked 14d — Sep 3 slate was 9/9 at 14d), OR today’s probable SP on that club’s 40-man IL.
+          Badge (non-screening): 40-man IL with notes. Chronic D60 after day 14 is badge-only. Universe: StatsAPI rosterType=40Man (D7/D10/D15/D60). Never day-to-day/questionable.
+        </div>
+        <h3 style="margin-top:12px">Weather <span style="font-weight:500;color:var(--muted)">(ESPN)</span></h3>
+        <label class="toggle"><input type="checkbox" id="wx-indoor" /> Dome / indoor</label>
+        <label class="toggle"><input type="checkbox" id="wx-hot" /> Hot outdoor (≥90°)</label>
+        <label class="toggle"><input type="checkbox" id="wx-precip" /> Precip / storm risk</label>
+        <div class="sub" style="margin-top:4px;font-size:11px;color:var(--muted);line-height:1.35">
+          From ESPN scoreboard venue/weather when present. Null temp/condition left blank — not invented.
+        </div>
+        <h3 style="margin-top:12px">F5 proxy <span style="font-weight:500;color:var(--muted)">(not an edge)</span></h3>
+        <label class="toggle"><input type="checkbox" id="starter-adj-gap" /> Starter-adj gap |Δ|≥2</label>
+        <div class="sub" style="margin-top:4px;font-size:11px;color:var(--muted);line-height:1.35">
+          ESPN predictor starterAdjustment gap — slate screen only, not a backtested F5 trend.
+        </div>
       </div>
 
       <div class="control-block">
