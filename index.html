@@ -15,7 +15,7 @@
     <aside class="sidebar">
       <div class="brand">
         <h1>MLB Situation Explorer</h1>
-        <div class="sub">TeamRankings win / ATS / O-U trends × ESPN standings. Toggle situations & streaks to find teams in the spots that matter.</div>
+        <div class="sub">V2 Edge stack: scored layers (TR Δ · injury − · late-season · fatigue − · interim steam +) vs year-range baseline. L10/streak = filters. News/Coaching parked.</div>
       </div>
 
       <div class="control-block">
@@ -107,6 +107,34 @@
         </div>
       </div>
 
+
+      <div class="control-block" id="edge-stack-controls">
+        <h3>V2 Edge stack</h3>
+        <label class="toggle"><input type="checkbox" id="edge-stack-on" checked /> Edge stack mode (score teams)</label>
+        <div class="sub" style="margin-top:4px;font-size:11px;color:var(--muted);line-height:1.35">
+          <code>edge_pp = Σ enabled layers</code> vs year-range baseline (center of mass). Market = Category WIN or ATS (O/U out of stack). L10 + streak stay filters only.
+        </div>
+        <div class="row" style="margin-top:8px">
+          <label>Min edge_pp</label>
+          <input type="range" id="min-edge" min="-20" max="20" value="-20" />
+          <span class="val" id="min-edge-val">any</span>
+        </div>
+        <h3 style="margin-top:12px">Layers</h3>
+        <label class="toggle"><input type="checkbox" id="layer-tr" checked /> TR situations (signed Δ, context-matched)</label>
+        <label class="toggle"><input type="checkbox" id="layer-injury" checked /> Injury / suspension (− only)</label>
+        <label class="toggle"><input type="checkbox" id="layer-late" checked /> Late-season master (Aug 15+)</label>
+        <label class="toggle"><input type="checkbox" id="layer-fatigue" checked /> Fatigue (−)</label>
+        <label class="toggle"><input type="checkbox" id="layer-steam" checked /> Interim Steam (+ RD/G&gt;0)</label>
+        <div class="sub" style="margin-top:6px;font-size:11px;color:var(--muted);line-height:1.35">
+          TR Δ = team% − baseline%; per-Δ clamp [−8,+8]; Σ TR clamp [−10,+10]; at most one role (specific&gt;dog/fav&gt;home/away), one after W/L, one rest, one div/league. After W/L, rest, division default OFF.
+          Injury: SP IL/susp −4W/−2A; recent noted non-SP −1W/−0.5A; chronic badge only; cap −6W/−3A. No opponent +. Magnitudes not backtested.
+          Late-season: clinched −1.5W; must_chase +1.5W/+0.5A; dead_money −1W (+1A if DK dog). “Incentive overlay, partly priced.”
+          Fatigue: DH G2 OR asymmetric rest (0 vs opp ≥1d) OR TR rest_disadvantage (opp equal/adv) — DROP games≥6; not L10/streak. −1.5W/−1.0A.
+          Steam: season RD/G&gt;0 snapshot +0.5; rolling RD deferred. If Steam ON, RD-surplus-dog filter is not a second +.
+          <strong>News &amp; Coaching scored layers: PARKED</strong> (would invent).
+        </div>
+      </div>
+
       <div class="control-block">
         <h3>Today’s slate</h3>
         <label class="toggle"><input type="checkbox" id="today-only" /> Only situations true for today’s games</label>
@@ -154,6 +182,7 @@
           <button type="button" data-tab="heat" class="active">Heat map</button>
           <button type="button" data-tab="scatter">Scatter</button>
           <button type="button" data-tab="list">Filtered list</button>
+          <button type="button" data-tab="edge">Edge board</button>
           <button type="button" data-tab="today">Today finder</button>
         </div>
         <div class="stats-pill">
@@ -208,6 +237,16 @@
         <div id="scatter-chart" class="chart"></div>
       </section>
 
+
+      <section class="panel view-panel hidden" data-view="edge">
+        <div class="panel-title">
+          <h2>Edge board</h2>
+          <span class="hint">Per-team edge_pp vs year-range baseline · chips = signed layer pp · priced layers tagged</span>
+        </div>
+        <div class="sub" id="edge-summary" style="margin:0 0 10px;font-size:12px;color:var(--muted);line-height:1.4"></div>
+        <div id="edge-board"></div>
+      </section>
+
       <section class="panel view-panel hidden" data-view="list">
         <div class="panel-title">
           <h2>Filtered list</h2>
@@ -239,7 +278,7 @@
         <p style="margin:8px 0 0">
           Data from TeamRankings scrape + ESPN standings on disk. O/U situations are historically noisy; rest / after-win filters historically weak.
           Historical baselines are pooled TeamRankings situation rates; default window 2021–2026 (switch in the sidebar). Durable edges (ATS dogs, home favs) barely move vs 2007–2026.
-          Filter state saved in this browser (localStorage), not the URL. Regenerate with <code>python3 build_data.py</code>.
+          V2 edge stack magnitudes for injury / late-season / fatigue / interim steam are locked research weights — not historical hit rates. News &amp; Coaching scored layers parked. Filter state saved in this browser (localStorage), not the URL. Regenerate with <code>python3 build_data.py</code>.
         </p>
       </footer>
     </main>

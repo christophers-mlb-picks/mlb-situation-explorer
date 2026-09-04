@@ -24,7 +24,7 @@
     scatterX: "is_home_dog",
     scatterY: "is_away_dog",
     scatterSit: "is_home_dog",
-    sortCol: "pct",
+    sortCol: "edge_pp",
     sortDir: -1,
     pinned: null,
     todayOnly: false,
@@ -39,6 +39,13 @@
     wxHot: false,
     wxPrecip: false,
     starterAdjGap: false,
+    edgeStackOn: true,
+    layerTr: true,
+    layerInjury: true,
+    layerLate: true,
+    layerFatigue: true,
+    layerSteam: true,
+    minEdge: -20,
   };
 
   const $ = (sel, el = document) => el.querySelector(sel);
@@ -75,6 +82,13 @@
       if (typeof o.wxHot === "boolean") state.wxHot = o.wxHot;
       if (typeof o.wxPrecip === "boolean") state.wxPrecip = o.wxPrecip;
       if (typeof o.starterAdjGap === "boolean") state.starterAdjGap = o.starterAdjGap;
+      if (typeof o.edgeStackOn === "boolean") state.edgeStackOn = o.edgeStackOn;
+      if (typeof o.layerTr === "boolean") state.layerTr = o.layerTr;
+      if (typeof o.layerInjury === "boolean") state.layerInjury = o.layerInjury;
+      if (typeof o.layerLate === "boolean") state.layerLate = o.layerLate;
+      if (typeof o.layerFatigue === "boolean") state.layerFatigue = o.layerFatigue;
+      if (typeof o.layerSteam === "boolean") state.layerSteam = o.layerSteam;
+      if (typeof o.minEdge === "number") state.minEdge = o.minEdge;
       if (typeof o.yearLo === "number") state.yearLo = o.yearLo;
       if (typeof o.yearHi === "number") state.yearHi = o.yearHi;
       if (o.baselineWindow && typeof o.yearLo !== "number") {
@@ -112,6 +126,13 @@
       wxHot: state.wxHot,
       wxPrecip: state.wxPrecip,
       starterAdjGap: state.starterAdjGap,
+      edgeStackOn: state.edgeStackOn,
+      layerTr: state.layerTr,
+      layerInjury: state.layerInjury,
+      layerLate: state.layerLate,
+      layerFatigue: state.layerFatigue,
+      layerSteam: state.layerSteam,
+      minEdge: state.minEdge,
       yearLo: state.yearLo,
       yearHi: state.yearHi,
     };
@@ -165,6 +186,333 @@
   function baselineMeta(sc, cat) {
     return pooledBaseline(sc, cat);
   }
+
+  // ----- V2 Edge stack -----
+  const MIRROR_PAIRS = [
+    ["is_dog", "is_fav"],
+    ["is_home", "is_away"],
+    ["is_away_dog", "is_home_fav"],
+    ["is_home_dog", "is_away_fav"],
+    ["is_after_win", "is_after_loss"],
+    ["rest_advantage", "rest_disadvantage"],
+    ["is_division", "non_division"],
+    ["is_league", "non_league"],
+    ["no_rest", "one_day_off"], // soft: rest family still user-managed
+  ];
+  const PRICED_SITUATIONS = new Set([
+    "is_fav", "is_dog", "is_home_fav", "is_home_dog", "is_away_fav", "is_away_dog",
+  ]);
+  const DEFAULT_OFF_SITUATIONS = new Set([
+    "is_after_win", "is_after_loss",
+    "no_rest", "one_day_off", "two_three_days_off", "four_plus_days_off",
+    "is_doubleheader", "rest_advantage", "rest_disadvantage", "equal_rest",
+    "is_division", "non_division",
+    "is_league", "non_league", "is_neutral", "is_playoff",
+  ]);
+
+  function mirrorOf(sc) {
+    for (const [a, b] of MIRROR_PAIRS) {
+      if (sc === a) return b;
+      if (sc === b) return a;
+    }
+    return null;
+  }
+
+  function edgeMarket() {
+    // O/U out of stack — fall back to win for edge math if ou selected
+    if (state.category === "ats") return "ats";
+    return "win";
+  }
+
+  function edgeMarketLabel() {
+    return edgeMarket() === "ats" ? "ATS" : "WIN";
+  }
+
+  function contextSituationsForTeam(abbr) {
+    const out = todaysSituationsForTeam(abbr);
+    const t = state.data.teams.find((x) => x.abbr === abbr);
+    const fat = t?.edge_fatigue;
+    if (fat?.is_dh_g2_today) out.add("is_doubleheader");
+    if (fat?.rest_disadvantage) out.add("rest_disadvantage");
+    else if (fat && fat.rest_days != null && fat.opp_rest_days != null) {
+      if (fat.rest_days > fat.opp_rest_days) out.add("rest_advantage");
+      else if (fat.rest_days === fat.opp_rest_days) out.add("equal_rest");
+    }
+    return out;
+  }
+
+  function clampDelta(d) {
+    if (d == null || Number.isNaN(d)) return 0;
+    return Math.max(-8, Math.min(8, +d));
+  }
+
+  function clampTrSum(s) {
+    if (s == null || Number.isNaN(s)) return 0;
+    return Math.max(-10, Math.min(10, +s));
+  }
+
+  // Role exclusivity (LOCKED): at most ONE role Δ — prefer most specific
+  const ROLE_SPECIFIC = ["is_home_dog", "is_away_dog", "is_home_fav", "is_away_fav"];
+  const ROLE_SIDE = ["is_dog", "is_fav"];
+  const ROLE_VENUE = ["is_home", "is_away"];
+  const ROLE_SET = new Set([...ROLE_SPECIFIC, ...ROLE_SIDE, ...ROLE_VENUE]);
+  const AFTER_SET = new Set(["is_after_win", "is_after_loss"]);
+  const REST_SET = new Set([
+    "no_rest", "one_day_off", "two_three_days_off", "four_plus_days_off",
+    "is_doubleheader", "rest_advantage", "rest_disadvantage", "equal_rest",
+  ]);
+  const REST_PREF = [
+    "rest_disadvantage", "rest_advantage", "equal_rest", "is_doubleheader",
+    "no_rest", "one_day_off", "two_three_days_off", "four_plus_days_off",
+  ];
+  const DIV_LEAGUE_SET = new Set([
+    "is_division", "non_division", "is_league", "non_league",
+  ]);
+  const DIV_LEAGUE_PREF = ["is_division", "non_division", "is_league", "non_league"];
+
+  function pickFirst(order, matching) {
+    for (const sc of order) {
+      if (matching.has(sc)) return sc;
+    }
+    return null;
+  }
+
+  function computeTrLayer(abbr, market) {
+    if (!state.layerTr) return { pp: 0, chips: [] };
+    const ctx = contextSituationsForTeam(abbr);
+    const chips = [];
+    let sum = 0;
+    // Enabled + matching today's context (mirrors still help skip opposite side)
+    const matching = new Set();
+    for (const sc of state.situations) {
+      if (!ctx.has(sc)) continue;
+      if (sc === "all_games" || sc === "is_regular_season") continue;
+      matching.add(sc);
+    }
+    // Mirror dedupe: if both of a pair enabled+matching, keep context side only
+    for (const [a, b] of MIRROR_PAIRS) {
+      if (matching.has(a) && matching.has(b)) {
+        // Prefer the one that is truly the context side; if both, drop second
+        matching.delete(b);
+      }
+    }
+
+    // Family exclusivity (LOCKED Miles Calder V2)
+    const chosen = new Set();
+    // Role: home_dog/away_dog/home_fav/away_fav > dog/fav > home/away
+    const role = pickFirst([...ROLE_SPECIFIC, ...ROLE_SIDE, ...ROLE_VENUE], matching);
+    if (role) chosen.add(role);
+    // After W/L: at most one
+    const after = pickFirst(["is_after_win", "is_after_loss"], matching);
+    if (after) chosen.add(after);
+    // Rest: at most one
+    const rest = pickFirst(REST_PREF, matching);
+    if (rest) chosen.add(rest);
+    // Division/league: at most one
+    const divL = pickFirst(DIV_LEAGUE_PREF, matching);
+    if (divL) chosen.add(divL);
+    // Other matching situations outside exclusive families
+    for (const sc of matching) {
+      if (ROLE_SET.has(sc) || AFTER_SET.has(sc) || REST_SET.has(sc) || DIV_LEAGUE_SET.has(sc)) continue;
+      chosen.add(sc);
+    }
+
+    for (const sc of chosen) {
+      const c = cell(abbr, sc, market);
+      if (!c || c.pct == null) continue;
+      const b = baseline(sc, market);
+      if (b == null) continue;
+      const raw = +(c.pct - b).toFixed(2);
+      const d = clampDelta(raw);
+      if (d === 0 && raw === 0) continue;
+      sum += d;
+      const sit = state.data.situations.find((s) => s.sc === sc);
+      chips.push({
+        id: "tr:" + sc,
+        label: (sit?.label || sc).replace(/^As /, ""),
+        pp: d,
+        priced: PRICED_SITUATIONS.has(sc),
+        group: "tr",
+      });
+    }
+    const capped = clampTrSum(sum);
+    if (capped !== +sum.toFixed(2) && Math.abs(sum) > 10) {
+      chips.push({
+        id: "tr:sum_cap",
+        label: `TR Σ cap (${sum >= 0 ? "+" : ""}${sum.toFixed(1)}→${capped >= 0 ? "+" : ""}${capped.toFixed(1)})`,
+        pp: +(capped - sum).toFixed(2),
+        priced: false,
+        group: "tr",
+        title: "Σ TR Δ clamped to [-10,+10]",
+      });
+    }
+    return { pp: +capped.toFixed(2), chips };
+  }
+
+  function computeInjuryLayer(t, market) {
+    if (!state.layerInjury) return { pp: 0, chips: [] };
+    const inj = t.edge_injury;
+    if (!inj) return { pp: 0, chips: [] };
+    const pp = market === "ats" ? +inj.ats_pp || 0 : +inj.win_pp || 0;
+    if (!pp) {
+      // still show chronic badge-only via zero chip? skip
+      return { pp: 0, chips: [] };
+    }
+    const bits = (inj.parts || []).map((p) => p.label).join("; ") || "injury/suspension";
+    return {
+      pp,
+      chips: [{
+        id: "injury",
+        label: bits.length > 48 ? "Injury/susp −" : bits,
+        pp,
+        priced: false,
+        group: "injury",
+        title: inj.source || "",
+      }],
+    };
+  }
+
+  function computeLateLayer(t, market) {
+    if (!state.layerLate) return { pp: 0, chips: [] };
+    const late = t.edge_late;
+    if (!late || !late.gate_ok || !late.tag) return { pp: 0, chips: [] };
+    const pp = market === "ats" ? +late.ats_pp || 0 : +late.win_pp || 0;
+    if (!pp && late.tag !== "clinched") {
+      // clinched ATS is 0 by design — still show chip when WIN market uses it; for ATS skip if 0
+      if (market === "ats" && late.tag === "clinched") {
+        return {
+          pp: 0,
+          chips: [{
+            id: "late",
+            label: "clinched (0 ATS)",
+            pp: 0,
+            priced: true,
+            group: "late",
+            title: late.label,
+          }],
+        };
+      }
+    }
+    if (!pp && late.tag === "dead_money" && market === "ats" && !late.is_dk_dog) {
+      return {
+        pp: 0,
+        chips: [{
+          id: "late",
+          label: "dead_money (0 ATS, not dog)",
+          pp: 0,
+          priced: true,
+          group: "late",
+          title: late.label,
+        }],
+      };
+    }
+    if (!pp) return { pp: 0, chips: [] };
+    return {
+      pp,
+      chips: [{
+        id: "late",
+        label: `${late.tag}`,
+        pp,
+        priced: true,
+        group: "late",
+        title: late.label + " — " + (late.source || ""),
+      }],
+    };
+  }
+
+  function computeFatigueLayer(t, market) {
+    if (!state.layerFatigue) return { pp: 0, chips: [] };
+    const fat = t.edge_fatigue;
+    if (!fat) return { pp: 0, chips: [] };
+    if (fat.error) {
+      return {
+        pp: 0,
+        chips: [{
+          id: "fatigue",
+          label: "fatigue error→0",
+          pp: 0,
+          priced: false,
+          group: "fatigue",
+          title: String(fat.error),
+        }],
+      };
+    }
+    if (!fat.trigger) return { pp: 0, chips: [] };
+    const pp = market === "ats" ? +fat.ats_pp || 0 : +fat.win_pp || 0;
+    return {
+      pp,
+      chips: [{
+        id: "fatigue",
+        label: "fatigue (" + (fat.reasons || []).join(", ") + ")",
+        pp,
+        priced: false,
+        group: "fatigue",
+        title: fat.source || "",
+      }],
+    };
+  }
+
+  function computeSteamLayer(t, market) {
+    if (!state.layerSteam) return { pp: 0, chips: [] };
+    const st = t.edge_steam;
+    if (!st || !st.trigger) return { pp: 0, chips: [] };
+    const pp = market === "ats" ? +st.ats_pp || 0 : +st.win_pp || 0;
+    return {
+      pp,
+      chips: [{
+        id: "steam",
+        label: "interim steam RD/G>0",
+        pp,
+        priced: false,
+        group: "steam",
+        title: (st.label || "") + " — " + (st.source || ""),
+      }],
+    };
+  }
+
+  function computeEdge(t) {
+    const market = edgeMarket();
+    const { lo, hi } = yearRange();
+    const layers = [];
+    const tr = computeTrLayer(t.abbr, market);
+    const inj = computeInjuryLayer(t, market);
+    const late = computeLateLayer(t, market);
+    const fat = computeFatigueLayer(t, market);
+    const steam = computeSteamLayer(t, market);
+    for (const L of [tr, inj, late, fat, steam]) {
+      layers.push(...L.chips);
+    }
+    const edge_pp = +(tr.pp + inj.pp + late.pp + fat.pp + steam.pp).toFixed(2);
+    const layerSummary = layers
+      .filter((c) => c.pp !== 0)
+      .map((c) => `${c.label} ${c.pp >= 0 ? "+" : ""}${c.pp.toFixed(1)}`)
+      .join("; ");
+    const copy = `Edge vs ${lo}–${hi} baseline: ${edge_pp >= 0 ? "+" : ""}${edge_pp.toFixed(1)} pp (${edgeMarketLabel()}). Layers: ${layerSummary || "none"}`;
+    return {
+      edge_pp,
+      market,
+      lo,
+      hi,
+      chips: layers,
+      copy,
+      parts: { tr: tr.pp, injury: inj.pp, late: late.pp, fatigue: fat.pp, steam: steam.pp },
+    };
+  }
+
+  function fmtPp(pp) {
+    if (pp == null) return "—";
+    const n = +pp;
+    return (n >= 0 ? "+" : "") + n.toFixed(1);
+  }
+
+  function chipHtml(c) {
+    const cls = c.pp > 0 ? "pos" : c.pp < 0 ? "neg" : "zero";
+    const priced = c.priced ? '<span class="priced" title="Partly priced into the number">priced</span>' : "";
+    const title = (c.title || c.label || "").replace(/"/g, "&quot;");
+    return `<span class="edge-chip ${cls}" title="${title}"><span class="layer-name">${c.label}</span> <strong>${fmtPp(c.pp)}</strong>${priced}</span>`;
+  }
+
+
 
   function updateYearSpanLabel() {
     const el = $("#year-span");
@@ -294,11 +642,15 @@
     return state.data.teams.filter((t) => {
       if (!(teamPassesStreak(t) && teamPassesL10(t) && teamPassesSearch(t))) return false;
       if (state.todayOnly && !slateForTeam(t.abbr)) return false;
+      // Steam ON dedupe: RD-surplus-dog remains a FILTER only (no second + in stack)
       if (state.rdSurplusDog && !isRdSurplusDog(t)) return false;
       if (!teamPassesPlayoff(t)) return false;
       if (anyGameSlateFilter()) {
         const g = slateForTeam(t.abbr);
         if (!gamePassesSlateScreens(g)) return false;
+      }
+      if (state.edgeStackOn && state.minEdge > -20) {
+        if (computeEdge(t).edge_pp < state.minEdge) return false;
       }
       return true;
     });
@@ -776,6 +1128,7 @@
       pct: (r) => r.cell.pct,
       n: (r) => r.cell.n || 0,
       edge: (r) => (r.edge == null ? -999 : r.edge),
+      edge_pp: (r) => computeEdge(r.team).edge_pp,
       slate: (r) => (slateForTeam(r.team.abbr)?.name || ""),
     };
 
@@ -804,6 +1157,7 @@
       <th class="num" data-col="pct">Pct</th>
       <th class="num" data-col="n">N</th>
       <th class="num" data-col="edge">vs Baseline</th>
+      <th class="num" data-col="edge_pp">edge_pp</th>
       ${hasSlate ? '<th data-col="slate">Today</th>' : ""}
     </tr></thead><tbody>`;
 
@@ -840,6 +1194,7 @@
         <td class="num">${r.cell.pct}%</td>
         <td class="num">${r.cell.n ?? "—"}</td>
         <td class="num ${edgeCls}">${edgeTxt}${r.baseline != null ? ` <span style="color:var(--muted);font-size:0.7rem">(${r.baseline}%)</span>` : ""}</td>
+        <td class="num ${computeEdge(r.team).edge_pp >= 0 ? "edge-pos" : "edge-neg"}">${fmtPp(computeEdge(r.team).edge_pp)}</td>
         ${hasSlate ? `<td>${slateCell}</td>` : ""}
       </tr>`;
     }
@@ -922,6 +1277,99 @@
     return bits.join(" ");
   }
 
+
+  function renderEdgeBoard() {
+    const host = $("#edge-board");
+    const summary = $("#edge-summary");
+    if (!host) return;
+    const market = edgeMarket();
+    const { lo, hi } = yearRange();
+    if (state.category === "ou") {
+      if (summary) {
+        summary.innerHTML = "O/U is out of the edge stack — switch Category to Win% or Cover% (ATS). Heat/list still work for Over%.";
+      }
+      host.innerHTML = '<div class="empty">Edge stack uses WIN or ATS only.</div>';
+      return;
+    }
+    let teams = filteredTeams().filter((t) => slateForTeam(t.abbr)); // slate-focused board
+    // If no slate filter desire — still show slate teams primarily; if todayOnly off and no slate, show all
+    if (!teams.length) {
+      teams = filteredTeams();
+    }
+    const rows = teams.map((t) => ({ t, edge: computeEdge(t) }));
+    rows.sort((a, b) => b.edge.edge_pp - a.edge.edge_pp);
+    const filtered = rows.filter((r) => r.edge.edge_pp >= state.minEdge);
+    if (summary) {
+      const steamNote = state.layerSteam
+        ? " Interim Steam ON → RD-surplus-dog checkbox is not double-counted as a +. Real rolling-RD steam deferred."
+        : "";
+      summary.innerHTML =
+        `Market <strong>${edgeMarketLabel()}</strong> · baseline <strong>${lo}–${hi}</strong> · ${filtered.length} teams` +
+        (state.edgeStackOn ? "" : " · stack mode off (board still shows scores)") +
+        `. News &amp; Coaching scored layers parked.` + steamNote;
+    }
+    if (!filtered.length) {
+      host.innerHTML = '<div class="empty">No teams meet min edge_pp / filters.</div>';
+      return;
+    }
+    host.innerHTML = `<div class="edge-board">${filtered
+      .map(({ t, edge }) => {
+        const g = slateForTeam(t.abbr);
+        const role = g
+          ? g.dog_abbr === t.abbr
+            ? "DOG"
+            : g.home_abbr === t.abbr
+            ? "HOME"
+            : "AWAY"
+          : "";
+        const ppCls = edge.edge_pp >= 0 ? "edge-pos" : "edge-neg";
+        const chips = edge.chips.filter((c) => c.pp !== 0 || c.group === "late").map(chipHtml).join("");
+        const v12 = g ? v12Badges(g) : "";
+        const fat = t.edge_fatigue?.trigger
+          ? `<span class="badge fatigue" title="schedule density / DH / rest — not L10">Fatigue</span>`
+          : "";
+        const steam = t.edge_steam?.trigger
+          ? `<span class="badge steam" title="interim season RD/G>0">Steam*</span>`
+          : "";
+        return `<div class="edge-row" data-abbr="${t.abbr}">
+          <div class="edge-row-head">
+            <div class="team-line">${t.abbr} <span style="color:var(--muted);font-weight:500">${t.name}</span>
+              ${streakBadge(t.STRK)} <span style="color:var(--muted);font-size:0.75rem">L10 ${t.L10}</span>
+              ${role ? `<span class="badge">${role}</span>` : ""}
+              ${g ? `<span style="color:var(--muted);font-size:0.75rem">${g.name}</span>` : ""}
+              ${fat}${steam}
+            </div>
+            <div class="edge-pp ${ppCls}">${fmtPp(edge.edge_pp)} <span style="font-size:0.75rem;color:var(--muted)">pp ${edgeMarketLabel()}</span></div>
+          </div>
+          <div class="edge-copy">${edge.copy}</div>
+          <div class="edge-chips">${chips || '<span class="edge-chip zero">no active layer pp</span>'}</div>
+          ${v12 ? `<div class="badge-row" style="margin-top:6px">${v12}</div>` : ""}
+        </div>`;
+      })
+      .join("")}</div>`;
+    $$(".edge-row", host).forEach((row) => {
+      row.addEventListener("click", () => pinTeam(row.dataset.abbr));
+    });
+  }
+
+
+
+  function edgeMiniForGame(g) {
+    if (!state.edgeStackOn) return "";
+    const bits = [];
+    for (const abbr of [g.away_abbr, g.home_abbr]) {
+      if (!abbr) continue;
+      const t = state.data.teams.find((x) => x.abbr === abbr);
+      if (!t) continue;
+      const edge = computeEdge(t);
+      const cls = edge.edge_pp >= 0 ? "edge-pos" : "edge-neg";
+      bits.push(`<div><strong>${abbr}</strong> <span class="${cls}">${fmtPp(edge.edge_pp)} pp ${edgeMarketLabel()}</span>
+        <span style="color:var(--muted)">· ${edge.chips.filter((c)=>c.pp!==0).slice(0,4).map((c)=>`${c.label} ${fmtPp(c.pp)}`).join(", ") || "flat"}</span></div>`);
+    }
+    if (!bits.length) return "";
+    return `<div class="edge-mini">${bits.join("")}</div>`;
+  }
+
   function renderToday() {
     const panel = $("#today-panel");
     const el = $("#today-grid");
@@ -976,6 +1424,7 @@
           Win ${winC ? `${winC.pct}% (${winC.record}, n=${winC.n})` : "—"} ${we}<br>
           Cover ${atsC ? `${atsC.pct}% (${atsC.record}, n=${atsC.n})` : "—"} ${ce}
         </div>
+        ${edgeMiniForGame(g)}
       </div>`;
     };
 
@@ -1006,10 +1455,12 @@
     }
     const g = slateForTeam(abbr);
     bar.classList.add("visible");
+    const edge = computeEdge(t);
     $("#detail-text").innerHTML = `<strong>${t.name} (${t.abbr})</strong> · ${t.W}-${t.L} · ${streakBadge(t.STRK)} · L10 ${t.L10} · DIFF ${t.DIFF >= 0 ? "+" : ""}${t.DIFF}` +
       (g
         ? ` · Today: ${g.name} · DK ${g.home_abbr === abbr ? g.dk_ml_home : g.dk_ml_away} · ESPN ${(g.home_abbr === abbr ? g.espn_home_wp : g.espn_away_wp)?.toFixed?.(1) ?? "—"}%`
-        : "");
+        : "") +
+      `<div class="edge-copy" style="margin-top:6px">${edge.copy}</div><div class="edge-chips">${edge.chips.filter((c)=>c.pp!==0).map(chipHtml).join("")}</div>`;
     renderList();
   }
 
@@ -1030,9 +1481,13 @@
     if (tab === "heat") renderHeat();
     if (tab === "scatter") renderScatter();
     if (tab === "list") renderList();
+    if (tab === "edge") renderEdgeBoard();
     if (tab === "today") renderToday();
-    // always keep today finder available in stacked? tabs only
+    // always keep today finder panel in sync
     renderToday();
+    if (tab !== "edge") {
+      // keep edge board warm when stacked? only when tab edge — already handled
+    }
     saveState();
   }
 
@@ -1042,14 +1497,27 @@
     for (const s of state.data.situations) {
       const id = "sit-" + s.sc;
       const lab = document.createElement("label");
-      lab.innerHTML = `<input type="checkbox" id="${id}" data-sc="${s.sc}" ${state.situations.has(s.sc) ? "checked" : ""}> ${s.label}`;
+      const priced = PRICED_SITUATIONS.has(s.sc)
+        ? '<span class="priced-tag" title="Fav/dog Δs are priced into the number">priced</span>'
+        : "";
+      lab.innerHTML = `<input type="checkbox" id="${id}" data-sc="${s.sc}" ${state.situations.has(s.sc) ? "checked" : ""}> <span>${s.label}</span>${priced}`;
       box.appendChild(lab);
     }
     box.addEventListener("change", (e) => {
       const t = e.target;
       if (t.dataset.sc) {
-        if (t.checked) state.situations.add(t.dataset.sc);
-        else state.situations.delete(t.dataset.sc);
+        if (t.checked) {
+          state.situations.add(t.dataset.sc);
+          // Mirror dedupe: selecting one disables mirror
+          const m = mirrorOf(t.dataset.sc);
+          if (m && state.situations.has(m)) {
+            state.situations.delete(m);
+            const other = box.querySelector(`input[data-sc="${m}"]`);
+            if (other) other.checked = false;
+          }
+        } else {
+          state.situations.delete(t.dataset.sc);
+        }
         renderAll();
       }
     });
@@ -1234,6 +1702,21 @@
     bindToggle("wx-hot", "wxHot");
     bindToggle("wx-precip", "wxPrecip");
     bindToggle("starter-adj-gap", "starterAdjGap");
+    bindToggle("edge-stack-on", "edgeStackOn");
+    bindToggle("layer-tr", "layerTr");
+    bindToggle("layer-injury", "layerInjury");
+    bindToggle("layer-late", "layerLate");
+    bindToggle("layer-fatigue", "layerFatigue");
+    bindToggle("layer-steam", "layerSteam");
+    const minEdgeEl = $("#min-edge");
+    if (minEdgeEl) {
+      minEdgeEl.addEventListener("input", (e) => {
+        state.minEdge = +e.target.value;
+        const v = $("#min-edge-val");
+        if (v) v.textContent = state.minEdge <= -20 ? "any" : String(state.minEdge);
+        renderAll();
+      });
+    }
     $("#search").addEventListener("input", (e) => {
       state.search = e.target.value;
       renderAll();
@@ -1302,6 +1785,18 @@
     setChk("wx-hot", state.wxHot);
     setChk("wx-precip", state.wxPrecip);
     setChk("starter-adj-gap", state.starterAdjGap);
+    setChk("edge-stack-on", state.edgeStackOn);
+    setChk("layer-tr", state.layerTr);
+    setChk("layer-injury", state.layerInjury);
+    setChk("layer-late", state.layerLate);
+    setChk("layer-fatigue", state.layerFatigue);
+    setChk("layer-steam", state.layerSteam);
+    const minEdgeEl2 = $("#min-edge");
+    if (minEdgeEl2) {
+      minEdgeEl2.value = state.minEdge;
+      const v = $("#min-edge-val");
+      if (v) v.textContent = state.minEdge <= -20 ? "any" : String(state.minEdge);
+    }
     $("#scatter-mode").value = state.scatterMode;
     $("#scatter-sit-wrap").style.display = state.scatterMode === "win_cover" ? "" : "none";
     $("#scatter-xy-wrap").style.display = state.scatterMode === "situations" ? "" : "none";
@@ -1326,7 +1821,16 @@
     state.data = await res.json();
 
     if (!state.situations.size) {
-      state.situations = new Set(state.data.situations.map((s) => s.sc));
+      // After W/L, rest, division default OFF (recency); mirrors left to user
+      state.situations = new Set(
+        state.data.situations.map((s) => s.sc).filter((sc) => !DEFAULT_OFF_SITUATIONS.has(sc))
+      );
+    } else if (!localStorage.getItem("mlb-tr-explorer-v2-edge")) {
+      // One-time migrate: drop after W/L, rest, division from prior V1.2 "all" saves
+      for (const sc of [...state.situations]) {
+        if (DEFAULT_OFF_SITUATIONS.has(sc)) state.situations.delete(sc);
+      }
+      try { localStorage.setItem("mlb-tr-explorer-v2-edge", "1"); } catch (_) {}
     }
     fillYearSelects();
 
@@ -1349,7 +1853,7 @@
     const slateNote = state.data.slate?.date
       ? `Slate: ${state.data.slate.date} (${state.data.slate.games.length} games)`
       : "No slate files found";
-    $("#meta-line").textContent = `Generated ${state.data.generated_at} · ${state.data.meta.n_teams} teams · ${state.data.meta.n_situations} situations · ${slateNote}`;
+    $("#meta-line").textContent = `Generated ${state.data.generated_at} · ${state.data.meta.n_teams} teams · ${state.data.meta.n_situations} situations · ${slateNote} · V2 edge stack (news/coaching parked)`;
 
     if (!state.data.slate?.games?.length) {
       const tb = $('.tabs button[data-tab="today"]');

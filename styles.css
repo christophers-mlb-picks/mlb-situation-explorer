@@ -353,3 +353,46 @@ footer {
 .badge.sa { color: #c4b5fd; border-color: rgba(196,181,253,0.45); background: rgba(196,181,253,0.1); max-width: 100%; white-space: normal; text-align: left; }
 .badge.poff { color: #f5a524; border-color: rgba(245,165,36,0.45); background: rgba(245,165,36,0.1); }
 .badge-row { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 2px; }
+
+
+/* V2 Edge stack */
+.edge-board { display: flex; flex-direction: column; gap: 8px; }
+.edge-row {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.edge-row-head {
+  display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px;
+}
+.edge-row-head .team-line { font-weight: 600; }
+.edge-pp {
+  font-family: var(--mono); font-size: 1.05rem; font-weight: 600;
+}
+.edge-copy { color: var(--muted); font-size: 0.78rem; margin-top: 4px; line-height: 1.4; }
+.edge-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.edge-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 8px; border-radius: 999px;
+  font-size: 0.72rem; font-family: var(--mono);
+  background: var(--chip); border: 1px solid var(--border);
+}
+.edge-chip.pos { color: var(--good); border-color: rgba(62,207,142,0.4); }
+.edge-chip.neg { color: var(--danger); border-color: rgba(255,92,122,0.4); }
+.edge-chip.zero { color: var(--muted); }
+.edge-chip .priced {
+  font-size: 0.65rem; color: var(--muted); opacity: 0.85;
+  border: 1px solid var(--border); border-radius: 4px; padding: 0 4px;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.edge-chip .layer-name { color: var(--text); font-family: var(--font); font-size: 0.72rem; }
+.sit-list label.mirror-off { opacity: 0.45; }
+.sit-list label .priced-tag {
+  margin-left: auto; font-size: 0.65rem; color: var(--muted);
+  border: 1px solid var(--border); border-radius: 4px; padding: 0 4px;
+}
+.game-card .edge-mini { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); font-size: 0.78rem; }
+.badge.fatigue { color: #f0abfc; border-color: rgba(240,171,252,0.45); background: rgba(240,171,252,0.1); }
+.badge.steam { color: #67e8f9; border-color: rgba(103,232,249,0.45); background: rgba(103,232,249,0.1); }
+.badge.parked { color: var(--muted); opacity: 0.7; }
