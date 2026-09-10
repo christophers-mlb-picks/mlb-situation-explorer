@@ -544,3 +544,158 @@ footer {
 .bet-layer .edge-chips { margin-top: 6px; }
 .bet-kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-family: var(--mono); font-size: 0.72rem; }
 .bet-kv span:first-child { color: var(--muted); }
+
+.tint-swatch.red { background: rgba(255,92,122,0.12); color: var(--danger); border: 1px solid rgba(255,92,122,0.45); }
+
+/* Decision-tree legend (Bet board) */
+.bet-flow-legend {
+  margin: 0 0 14px;
+  padding: 12px 12px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg2);
+}
+.bet-flow-title {
+  font-size: 0.78rem;
+  font-weight: 650;
+  margin: 0 0 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text);
+}
+.bet-flow-title .muted { font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--muted); font-size: 0.72rem; }
+.bet-flow-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 6px 4px;
+  margin-bottom: 10px;
+}
+.flow-node {
+  flex: 1 1 110px;
+  min-width: 100px;
+  max-width: 180px;
+  padding: 8px 9px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  font-size: 0.72rem;
+  font-weight: 650;
+  line-height: 1.35;
+  color: var(--text);
+}
+.flow-node .flow-sub {
+  display: block;
+  margin-top: 3px;
+  font-weight: 500;
+  font-size: 0.66rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+.flow-node.slate { border-color: rgba(139,155,180,0.45); }
+.flow-node.trends { border-color: rgba(245,165,36,0.45); background: rgba(245,165,36,0.06); }
+.flow-node.chart { border-color: rgba(96,165,250,0.4); background: rgba(96,165,250,0.06); }
+.flow-node.newbot { border-color: rgba(167,139,250,0.4); background: rgba(167,139,250,0.06); }
+.flow-node.miles { border-color: rgba(62,207,142,0.4); background: rgba(62,207,142,0.06); }
+.flow-node.compress { border-color: rgba(139,155,180,0.55); max-width: 220px; }
+.flow-arrow {
+  align-self: center;
+  color: var(--muted);
+  font-size: 0.9rem;
+  padding: 0 2px;
+  flex: 0 0 auto;
+}
+.bet-flow-kills {
+  font-size: 0.74rem;
+  color: var(--muted);
+  line-height: 1.4;
+  border-top: 1px dashed var(--border);
+  padding-top: 8px;
+}
+.bet-flow-kills strong { color: var(--text); font-size: 0.72rem; }
+.bet-flow-kills ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+.bet-flow-kills li { margin: 2px 0; }
+.bet-flow-kills code { font-family: var(--mono); font-size: 0.68rem; color: var(--text); }
+
+/* Per-card decision step strip */
+.bet-decision-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 3px;
+  padding: 8px 10px 0;
+  font-size: 0.68rem;
+}
+.bet-step {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px 7px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  min-width: 0;
+  max-width: 140px;
+  line-height: 1.25;
+}
+.bet-step .step-k {
+  font-size: 0.58rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.bet-step .step-v {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bet-step.green { border-color: rgba(62,207,142,0.5); background: rgba(62,207,142,0.1); }
+.bet-step.green .step-v { color: var(--good); }
+.bet-step.amber { border-color: rgba(245,165,36,0.5); background: rgba(245,165,36,0.1); }
+.bet-step.amber .step-v { color: var(--warn); }
+.bet-step.gray { border-color: var(--border); opacity: 0.95; }
+.bet-step.gray .step-v { color: var(--muted); }
+.bet-step.red { border-color: rgba(255,92,122,0.5); background: rgba(255,92,122,0.1); }
+.bet-step.red .step-v { color: var(--danger); }
+.bet-step.overall {
+  margin-left: 2px;
+  font-weight: 700;
+}
+.bet-step-arrow {
+  color: var(--muted);
+  font-size: 0.75rem;
+  flex: 0 0 auto;
+}
+.bet-kill-note {
+  margin: 6px 10px 0;
+  padding: 5px 8px;
+  border-radius: 8px;
+  border: 1px dashed rgba(255,92,122,0.4);
+  background: rgba(255,92,122,0.06);
+  font-size: 0.7rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+.bet-kill-note strong { color: var(--danger); font-weight: 650; }
+.bet-caution-note {
+  margin: 6px 10px 0;
+  padding: 5px 8px;
+  border-radius: 8px;
+  border: 1px dashed rgba(245,165,36,0.4);
+  background: rgba(245,165,36,0.06);
+  font-size: 0.7rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+.bet-caution-note strong { color: var(--warn); font-weight: 650; }
+
+.flow-node em { font-style: italic; font-weight: 500; color: var(--muted); font-size: 0.64rem; }
+

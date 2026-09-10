@@ -1578,21 +1578,37 @@
     };
   }
 
-  /** Locked overall tint rules */
+  /** Locked overall tint rules — Miles last gate: clear→green path only; kill|stand_down→PASS gray; watch→WATCH amber. */
   function overallVisual(trends, miles) {
     const st = miles.status || "stand_down";
-    if (st === "kill") return { tint: "gray", label: "pass", why: "Miles kill" };
-    if (!trends.hasLean) return { tint: "gray", label: "pass", why: "No Trends lean" };
+    if (st === "kill") {
+      const killTxt = (miles.kill || "").trim();
+      return {
+        tint: "gray",
+        label: "pass",
+        why: killTxt ? `Miles kill: ${killTxt}` : "Miles kill",
+        branch: "miles_kill",
+      };
+    }
+    if (st === "stand_down") {
+      return {
+        tint: "gray",
+        label: "pass",
+        why: "Miles stand_down (no path around Miles to green)",
+        branch: "miles_stand_down",
+      };
+    }
+    if (!trends.hasLean) return { tint: "gray", label: "pass", why: "No Trends lean", branch: "no_trends" };
     const lean = trends.lean;
     if (st === "clear") {
       const sideOk = sidesMatch(lean.side, miles.side);
       const mktOk = !miles.market || miles.market === "none" || marketMatch(lean.market, miles.market);
-      if (sideOk && mktOk) return { tint: "green", label: "lean", why: "Miles clear + Trends agree" };
-      return { tint: "gray", label: "pass", why: "Trends↔Miles conflict" };
+      if (sideOk && mktOk) return { tint: "green", label: "green", why: "Miles clear + Trends agree", branch: "clear_agree" };
+      return { tint: "gray", label: "pass", why: "Trends↔Miles conflict", branch: "side_conflict" };
     }
-    // stand_down or watch
-    if (st === "watch") return { tint: "amber", label: "watch", why: "Trends lean · Miles watch" };
-    return { tint: "amber", label: "watch", why: "Trends lean · Miles stand_down (awaiting mark)" };
+    // watch only → amber WATCH end
+    if (st === "watch") return { tint: "amber", label: "watch", why: "Trends lean · Miles watch", branch: "miles_watch" };
+    return { tint: "gray", label: "pass", why: `Miles ${st}`, branch: "miles_other" };
   }
 
   function milesChipTint(miles) {
@@ -1713,7 +1729,81 @@
       .replace(/"/g, "&quot;");
   }
 
-  function enrichBetGame(g) {
+  function decisionSteps(r) {
+    const trends = r.trends;
+    const miles = r.miles;
+    const chart = r.chart;
+    const nb = r.newbot;
+    const lean = trends.lean;
+    const trendsStep = lean
+      ? { key: "Trends", value: `${lean.market} ${normAbbr(lean.side)}`, tint: "amber", fired: true }
+      : { key: "Trends", value: "pass", tint: "gray", fired: false };
+    let chartTint = "gray";
+    let chartVal = "awaiting";
+    if (chart && !chart.awaiting && chart.screen) {
+      chartVal = chart.screen;
+      chartTint = chart.screen === "green" ? "green" : chart.screen === "amber" ? "amber" : chart.screen === "red" ? "red" : "gray";
+    }
+    const chartStep = { key: "Chart", value: chartVal, tint: chartTint, fired: !!(chart && !chart.awaiting && chart.screen), caution: chartVal === "red" };
+    let nbTint = "gray";
+    let nbVal = "none";
+    if (nb && nb.present) {
+      nbVal = nb.status || "pass";
+      nbTint = nbVal === "watch" ? "amber" : "gray";
+    }
+    const killArr = (nb && nb.present)
+      ? (Array.isArray(nb.kill) ? nb.kill : (nb.kill ? [nb.kill] : []))
+      : [];
+    const nbStep = { key: "New Bot", value: nbVal, tint: nbTint, fired: !!(nb && nb.present), killText: killArr.filter(Boolean).join("; ") };
+    const mSt = miles.status || "stand_down";
+    let mTint = "gray";
+    if (mSt === "clear") mTint = "green";
+    else if (mSt === "watch") mTint = "amber";
+    else if (mSt === "kill") mTint = "red";
+    const milesStep = {
+      key: "Miles",
+      value: mSt,
+      tint: mTint,
+      fired: true,
+      killText: mSt === "kill" ? ((miles.kill || "").trim()) : "",
+    };
+    const overallMap = { green: "GREEN", amber: "WATCH", gray: "PASS" };
+    const overallStep = {
+      key: "Overall",
+      value: overallMap[r.overall.tint] || String(r.overall.label || "").toUpperCase(),
+      tint: r.overall.tint,
+      fired: true,
+      overall: true,
+    };
+    return { trendsStep, chartStep, nbStep, milesStep, overallStep, why: r.overall.why || "", branch: r.overall.branch || "" };
+  }
+
+  function renderDecisionStrip(r) {
+    const s = decisionSteps(r);
+    const steps = [s.trendsStep, s.chartStep, s.nbStep, s.milesStep, s.overallStep];
+    const nodes = steps.map((st, i) => {
+      const arrow = i ? '<span class="bet-step-arrow" aria-hidden="true">→</span>' : "";
+      const cls = `bet-step ${st.tint}${st.overall ? " overall" : ""}`;
+      return `${arrow}<div class="${cls}" title="${escapeHtml(st.key + ": " + st.value)}"><span class="step-k">${escapeHtml(st.key)}</span><span class="step-v">${escapeHtml(st.value)}</span></div>`;
+    }).join("");
+    let notes = "";
+    if (s.milesStep.killText) {
+      notes += `<div class="bet-kill-note"><strong>Miles kill</strong> · ${escapeHtml(s.milesStep.killText)}</div>`;
+    } else if (s.branch === "miles_stand_down") {
+      notes += `<div class="bet-caution-note"><strong>Miles stand_down</strong> · tree ends PASS (gray) — no path around Miles to green</div>`;
+    } else if (s.branch === "side_conflict") {
+      notes += `<div class="bet-kill-note"><strong>Trends↔Miles conflict</strong> · ${escapeHtml(s.why)}</div>`;
+    }
+    if (s.nbStep.killText) {
+      notes += `<div class="bet-kill-note"><strong>New Bot kill criteria</strong> · ${escapeHtml(s.nbStep.killText)}</div>`;
+    }
+    if (s.chartStep.caution) {
+      notes += `<div class="bet-caution-note"><strong>Chart red</strong> · caution, not auto-kill</div>`;
+    }
+    return `<div class="bet-decision-strip" aria-label="Decision path">${nodes}</div>${notes}`;
+  }
+
+    function enrichBetGame(g) {
     const trends = computeTrendsLean(g);
     const miles = milesOf(g);
     const overall = overallVisual(trends, miles);
@@ -1739,7 +1829,7 @@
     if (singles) {
       if (!consider.length) {
         singles.className = "singles-strip empty-singles";
-        singles.innerHTML = "<h3>Singles to consider</h3><div class=\"muted\">None yet — need Trends lean (amber) or Miles clear agreement (green).</div>";
+        singles.innerHTML = "<h3>Singles to consider</h3><div class=\"muted\">None yet — need Miles watch + Trends lean (WATCH) or Miles clear + Trends agree (GREEN). stand_down/kill end PASS.</div>";
       } else {
         singles.className = "singles-strip";
         singles.innerHTML = `<h3>Singles to consider</h3><div class="singles-list">${consider.map((r) => {
@@ -1766,6 +1856,7 @@
       if (showC) layers.push(renderChartLayer(g));
       if (showN) layers.push(renderNewbotLayer(g));
       if (showM) layers.push(renderMilesLayer(g, r.miles));
+      const overallLabel = r.overall.tint === "green" ? "green" : r.overall.tint === "amber" ? "watch" : "pass";
       return `<article class="bet-card overall-${r.overall.tint}">
         <div class="bet-card-head">
           <div>
@@ -1774,8 +1865,9 @@
               · ESPN ${g.espn_away_wp != null ? Number(g.espn_away_wp).toFixed(1) + "%" : "—"} / ${g.espn_home_wp != null ? Number(g.espn_home_wp).toFixed(1) + "%" : "—"}
               · O/U ${g.total != null ? g.total : "—"}</div>
           </div>
-          <span class="bet-overall-badge ${r.overall.tint}">${r.overall.label}</span>
+          <span class="bet-overall-badge ${r.overall.tint}">${overallLabel}</span>
         </div>
+        ${renderDecisionStrip(r)}
         <div class="bet-layers">${layers.join("")}</div>
       </article>`;
     }).join("");

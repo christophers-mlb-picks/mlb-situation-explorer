@@ -264,12 +264,40 @@
           <span class="hint">Singles first · four toggleable layers · no lock cards</span>
         </div>
         <div class="bet-help" id="bet-help">
-          <strong>Overall tint</strong>:
-          <span class="tint-swatch green">green</span> Miles <code>clear</code> + Trends lean matches Miles side/market ·
-          <span class="tint-swatch amber">amber</span> Trends lean while Miles is <code>stand_down</code> or <code>watch</code> ·
-          <span class="tint-swatch gray">gray</span> Miles <code>kill</code>, no Trends lean, or Trends↔Miles conflict.
-          Miles chip itself is green only on <code>clear</code>; <code>kill</code>/<code>stand_down</code> gray the Miles chip (stand_down = unmarked, not an overall veto).
-          O/U Trends off by default. Chart / New Bot are optional feeds — never invented.
+          <strong>Overall tint</strong> (Miles is last gate):
+          <span class="tint-swatch green">GREEN</span> only via Miles <code>clear</code> + Trends lean matches Miles side/market ·
+          <span class="tint-swatch amber">WATCH</span> Trends lean + Miles <code>watch</code> ·
+          <span class="tint-swatch gray">PASS</span> Miles <code>kill</code> or <code>stand_down</code> (no path around Miles to green), no Trends lean, or Trends↔Miles conflict.
+          Show Miles <code>kill</code> string on that branch. O/U Trends off by default. Chart / New Bot are optional feeds — never invented.
+        </div>
+        <div class="bet-flow-legend" id="bet-flow-legend" aria-label="Decision tree legend">
+          <div class="bet-flow-title">Decision tree <span class="muted">(once per slate · our process, not invented)</span></div>
+          <div class="bet-flow-row">
+            <div class="flow-node slate">1 · Slate game</div>
+            <span class="flow-arrow" aria-hidden="true">→</span>
+            <div class="flow-node trends">2 · Trends vs DK<br/><span class="flow-sub">lean ML/RL · or pass</span></div>
+            <span class="flow-arrow" aria-hidden="true">→</span>
+            <div class="flow-node chart">3 · Chart<br/><span class="flow-sub">green / amber / red</span></div>
+            <span class="flow-arrow" aria-hidden="true">→</span>
+            <div class="flow-node newbot">4 · New Bot<br/><span class="flow-sub">pass / watch · edge / kill</span></div>
+            <span class="flow-arrow" aria-hidden="true">→</span>
+            <div class="flow-node miles">5 · Miles <em>(last gate)</em><br/><span class="flow-sub">clear→green · watch→WATCH · kill|stand_down→PASS</span></div>
+            <span class="flow-arrow" aria-hidden="true">→</span>
+            <div class="flow-node compress">6 · Compress<br/><span class="flow-sub"><span class="tint-swatch gray">PASS</span> <span class="tint-swatch amber">WATCH</span> <span class="tint-swatch green">GREEN</span></span></div>
+          </div>
+          <div class="bet-flow-kills">
+            <strong>Kill / pass branches · Miles last gate</strong>
+            <ul>
+              <li><code>Miles kill</code> → overall <span class="tint-swatch gray">PASS</span> (show kill string on branch)</li>
+              <li><code>Miles stand_down</code> → overall <span class="tint-swatch gray">PASS</span> — no path around Miles to green</li>
+              <li><code>Miles watch</code> + Trends lean → <span class="tint-swatch amber">WATCH</span></li>
+              <li><code>Miles clear</code> + Trends side/market match → <span class="tint-swatch green">GREEN</span> (only green path)</li>
+              <li>No Trends lean → <span class="tint-swatch gray">PASS</span></li>
+              <li>Trends ↔ Miles side/market conflict → <span class="tint-swatch gray">PASS</span></li>
+              <li>New Bot <code>kill</code> criteria (when present) shown on card — advisory, not auto overall kill</li>
+              <li>Chart <span class="tint-swatch red">red</span> = caution, not auto-kill</li>
+            </ul>
+          </div>
         </div>
         <div class="bet-layer-toggles" id="bet-layer-toggles">
           <label class="toggle"><input type="checkbox" id="bet-layer-trends" checked /> Trends</label>
