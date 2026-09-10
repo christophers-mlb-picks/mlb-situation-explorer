@@ -60,6 +60,9 @@
     bluffFatigue: false,
     bluffSteam: false,
     bluffChartLr: false,
+    bluffClinched: false,
+    bluffMustChase: false,
+    bluffDeadMoney: false,
   };
 
   const $ = (sel, el = document) => el.querySelector(sel);
@@ -113,6 +116,9 @@
       if (typeof o.bluffFatigue === "boolean") state.bluffFatigue = o.bluffFatigue;
       if (typeof o.bluffSteam === "boolean") state.bluffSteam = o.bluffSteam;
       if (typeof o.bluffChartLr === "boolean") state.bluffChartLr = o.bluffChartLr;
+      if (typeof o.bluffClinched === "boolean") state.bluffClinched = o.bluffClinched;
+      if (typeof o.bluffMustChase === "boolean") state.bluffMustChase = o.bluffMustChase;
+      if (typeof o.bluffDeadMoney === "boolean") state.bluffDeadMoney = o.bluffDeadMoney;
       if (typeof o.yearLo === "number") state.yearLo = o.yearLo;
       if (typeof o.yearHi === "number") state.yearHi = o.yearHi;
       if (o.baselineWindow && typeof o.yearLo !== "number") {
@@ -169,6 +175,9 @@
       bluffFatigue: state.bluffFatigue,
       bluffSteam: state.bluffSteam,
       bluffChartLr: state.bluffChartLr,
+      bluffClinched: state.bluffClinched,
+      bluffMustChase: state.bluffMustChase,
+      bluffDeadMoney: state.bluffDeadMoney,
     };
     try {
       localStorage.setItem("mlb-tr-explorer", JSON.stringify(o));
@@ -1917,7 +1926,8 @@
   // ----- Bluff scan (quality filter → fade-candidates; desk tree still gates) -----
   // Miles/Kane locks: injury = official IL tiers only (never 0–100);
   // fatigue = schedule/rest; steam = interim RD/G snapshot labeled;
-  // bluff = DK still ML-fav despite selected hits; not auto-bet;
+  // late playoff_tag hits (clinched / must_chase / dead_money) = team.playoff_tag from data.json only;
+  // bluff = DK still ML-fav despite selected hits (fog tease); not auto-bet;
   // Miles kill/stand_down → gray; New Bot edge must clear before size; Kane sizes fades smaller.
 
   function teamByAbbr(abbr) {
@@ -2046,6 +2056,8 @@
     const fat = fatigueOnForSide(g, abbr);
     const steam = steamOnForSide(g, abbr);
     const chart = chartLrOrDeficit(g, abbr, side);
+    const t = teamByAbbr(abbr);
+    const playoffTag = t?.playoff_tag || "";
     return {
       side,
       abbr,
@@ -2057,6 +2069,7 @@
       fatigue: fat,
       steam,
       chart,
+      playoffTag,
     };
   }
 
@@ -2064,7 +2077,8 @@
     // Need at least one hit quality — bare DK-fav alone is not a bluff scan
     return !!(
       state.bluffInjHeavy || state.bluffInjAny ||
-      state.bluffFatigue || state.bluffSteam || state.bluffChartLr
+      state.bluffFatigue || state.bluffSteam || state.bluffChartLr ||
+      state.bluffClinched || state.bluffMustChase || state.bluffDeadMoney
     );
   }
   function bluffFiltersActive() {
@@ -2093,13 +2107,31 @@
     if (state.bluffFatigue && !q.fatigue.on) return false;
     if (state.bluffSteam && !q.steam.on) return false;
     if (state.bluffChartLr && !q.chart.on) return false;
+    const poffChecked = state.bluffClinched || state.bluffMustChase || state.bluffDeadMoney;
+    if (poffChecked) {
+      const tag = q.playoffTag || "";
+      const ok =
+        (state.bluffClinched && tag === "clinched") ||
+        (state.bluffMustChase && tag === "must_chase") ||
+        (state.bluffDeadMoney && tag === "dead_money");
+      if (!ok) return false;
+    }
     return true;
+  }
+
+  function playoffTagLabel(tag) {
+    if (tag === "clinched") return "clinched";
+    if (tag === "must_chase") return "must-chase";
+    if (tag === "dead_money") return "dead money";
+    return null;
   }
 
   function firedQualityLabels(q) {
     const out = [];
     out.push(q.isAway ? "away" : "home");
     out.push(q.isFav ? "DK fav" : (q.isDog ? "DK dog" : "DK even"));
+    const poff = playoffTagLabel(q.playoffTag);
+    if (poff) out.push(poff);
     if (q.injury.anyHit) out.push(q.injury.label);
     if (q.fatigue.on) out.push(q.fatigue.label);
     if (q.steam.on) out.push(q.steam.label);
@@ -2109,6 +2141,8 @@
 
   function bluffOneLiner(q) {
     const hits = [];
+    const poff = playoffTagLabel(q.playoffTag);
+    if (poff) hits.push(poff);
     if (q.injury.anyHit) hits.push(q.injury.tier === "heavy" ? "injury heavy" : "injury hit");
     if (q.fatigue.on) hits.push("fatigue");
     if (q.steam.on) hits.push("steam");
@@ -2183,7 +2217,7 @@
     if (!offered && state.bluffChartLr) state.bluffChartLr = false;
 
     if (!bluffFiltersActive()) {
-      host.innerHTML = '<div class="bluff-results-empty">Select at least one hit (injury / fatigue / steam / chart) — Bluff lists sides DK still prices as ML fav despite those hits. Fade-candidates only (Kane: smaller size); Miles kill/stand_down stays gray; New Bot edge must clear before any size. Not auto-bet.</div>';
+      host.innerHTML = '<div class="bluff-results-empty">Select at least one hit (clinched / injury / fatigue / steam / chart) — Bluff lists sides DK still prices as ML fav despite those hits. Fade-candidates only (Kane: smaller size); Miles kill/stand_down stays gray; New Bot edge must clear before any size. Not auto-bet.</div>';
       return;
     }
     const matches = collectBluffMatches(enrichedRows);
@@ -2201,7 +2235,7 @@
         ? (m.desk.tint === "gray" ? " · Kane: NB edge ok but Miles gray — no size" : " · Kane: NB edge clear · fade size smaller")
         : " · Kane: New Bot edge not clear — no size yet";
       const qHtml = m.quals.map((lab) => {
-        const hit = /injury|fatigue|steam|chart/i.test(lab);
+        const hit = /injury|fatigue|steam|chart|clinched|must-chase|dead money/i.test(lab);
         return `<span class="q${hit ? " hit" : ""}">${escapeHtml(lab)}</span>`;
       }).join("");
       return `<div class="bluff-row tint-${m.desk.tint}">
@@ -2709,6 +2743,9 @@
     bluffToggle("bluff-fatigue", "bluffFatigue");
     bluffToggle("bluff-steam", "bluffSteam");
     bluffToggle("bluff-chart-lr", "bluffChartLr");
+    bluffToggle("bluff-clinched", "bluffClinched");
+    bluffToggle("bluff-must-chase", "bluffMustChase");
+    bluffToggle("bluff-dead-money", "bluffDeadMoney");
     const modeBluff = document.getElementById("bluff-mode-bluff");
     const modeDog = document.getElementById("bluff-mode-dog");
     const syncModeRadios = () => {
@@ -2801,6 +2838,9 @@
     setChk("bluff-fatigue", state.bluffFatigue);
     setChk("bluff-steam", state.bluffSteam);
     setChk("bluff-chart-lr", state.bluffChartLr);
+    setChk("bluff-clinched", state.bluffClinched);
+    setChk("bluff-must-chase", state.bluffMustChase);
+    setChk("bluff-dead-money", state.bluffDeadMoney);
     const mb = document.getElementById("bluff-mode-bluff");
     const md = document.getElementById("bluff-mode-dog");
     if (mb) mb.checked = state.bluffMode !== "dog";

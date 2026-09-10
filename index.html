@@ -312,6 +312,9 @@
             <label class="toggle"><input type="checkbox" id="bluff-dk-fav" checked /> DK Favorite</label>
             <label class="toggle"><input type="checkbox" id="bluff-dk-dog" /> DK Dog</label>
             <span class="bluff-group-label">Hits</span>
+            <label class="toggle"><input type="checkbox" id="bluff-clinched" /> Clinched / locked</label>
+            <label class="toggle"><input type="checkbox" id="bluff-must-chase" /> Must-chase</label>
+            <label class="toggle"><input type="checkbox" id="bluff-dead-money" /> Dead money</label>
             <label class="toggle"><input type="checkbox" id="bluff-inj-heavy" /> Injury heavy</label>
             <label class="toggle"><input type="checkbox" id="bluff-inj-any" /> Injury any official hit</label>
             <label class="toggle"><input type="checkbox" id="bluff-fatigue" /> Fatigue on</label>
@@ -319,7 +322,7 @@
             <label class="toggle" id="bluff-chart-wrap"><input type="checkbox" id="bluff-chart-lr" /> Chart LR / RD-deficit</label>
           </div>
           <p class="bluff-help" id="bluff-help">
-            Injury = official IL tiers only (none / light recent non-SP / heavy SP-on-IL or near cap) — never a 0–100 health dial. Fatigue = schedule/rest only. Steam = interim RD/G&gt;0 snapshot (labeled). Hits list <strong>fade-candidates</strong> only (Kane: smaller size); Miles kill/stand_down stays gray; New Bot edge must clear before any size. Not auto-bet — desk tree still gates.
+            Clinched / must-chase / dead money = team <code>playoff_tag</code> from data (ESPN POFF/GB snapshot) — fog tease when DK still prices that side as fav. Injury = official IL tiers only (none / light recent non-SP / heavy SP-on-IL or near cap) — never a 0–100 health dial. Fatigue = schedule/rest only. Steam = interim RD/G&gt;0 snapshot (labeled). Hits list <strong>fade-candidates</strong> only (Kane: smaller size); Miles kill/stand_down stays gray; New Bot edge must clear before any size. Not auto-bet — desk tree still gates.
           </p>
           <div class="bluff-results" id="bluff-results"></div>
         </aside>
