@@ -15,7 +15,7 @@
     <aside class="sidebar">
       <div class="brand">
         <h1>MLB Situation Explorer</h1>
-        <div class="sub">V2 Edge stack: scored layers (TR Δ · injury − · late-season · fatigue − · interim steam +) vs year-range baseline. L10/streak = filters. News/Coaching parked.</div>
+        <div class="sub">V3 Bet board: one slate card · Trends · Chart · New Bot · Miles. Singles-first. No lock cards / no 90% parlays. Edge stack filters still available.</div>
       </div>
 
       <div class="control-block">
@@ -179,11 +179,12 @@
     <main class="main">
       <div class="topbar">
         <div class="tabs">
-          <button type="button" data-tab="heat" class="active">Heat map</button>
+          <button type="button" data-tab="bet" class="active">Bet board</button>
+          <button type="button" data-tab="edge">Edge stack</button>
+          <button type="button" data-tab="today">Today finder</button>
+          <button type="button" data-tab="heat">Heat map</button>
           <button type="button" data-tab="scatter">Scatter</button>
           <button type="button" data-tab="list">Filtered list</button>
-          <button type="button" data-tab="edge">Edge board</button>
-          <button type="button" data-tab="today">Today finder</button>
         </div>
         <div class="stats-pill">
           <span id="stat-cat">Win%</span>
@@ -198,7 +199,7 @@
         <button type="button" id="unpin">Unpin</button>
       </div>
 
-      <section class="panel view-panel" data-view="heat">
+      <section class="panel view-panel hidden" data-view="heat">
         <div class="panel-title">
           <h2>Heat map</h2>
           <span class="hint">Rows = teams · columns = situations · click a row to pin</span>
@@ -256,6 +257,30 @@
         <div id="list-table"></div>
       </section>
 
+
+      <section class="panel view-panel" data-view="bet">
+        <div class="panel-title">
+          <h2>Bet board <span id="bet-date" style="color:var(--muted);font-weight:500"></span></h2>
+          <span class="hint">Singles first · four toggleable layers · no lock cards</span>
+        </div>
+        <div class="bet-help" id="bet-help">
+          <strong>Overall tint</strong>:
+          <span class="tint-swatch green">green</span> Miles <code>clear</code> + Trends lean matches Miles side/market ·
+          <span class="tint-swatch amber">amber</span> Trends lean while Miles is <code>stand_down</code> or <code>watch</code> ·
+          <span class="tint-swatch gray">gray</span> Miles <code>kill</code>, no Trends lean, or Trends↔Miles conflict.
+          Miles chip itself is green only on <code>clear</code>; <code>kill</code>/<code>stand_down</code> gray the Miles chip (stand_down = unmarked, not an overall veto).
+          O/U Trends off by default. Chart / New Bot are optional feeds — never invented.
+        </div>
+        <div class="bet-layer-toggles" id="bet-layer-toggles">
+          <label class="toggle"><input type="checkbox" id="bet-layer-trends" checked /> Trends</label>
+          <label class="toggle"><input type="checkbox" id="bet-layer-chart" checked /> Chart</label>
+          <label class="toggle"><input type="checkbox" id="bet-layer-newbot" checked /> New Bot</label>
+          <label class="toggle"><input type="checkbox" id="bet-layer-miles" checked /> Miles</label>
+        </div>
+        <div class="singles-strip" id="singles-strip"></div>
+        <div class="bet-grid" id="bet-grid"></div>
+      </section>
+
       <section class="panel" id="today-panel">
         <div class="panel-title">
           <h2>Today’s slate <span id="today-date" style="color:var(--muted);font-weight:500"></span></h2>
@@ -278,7 +303,7 @@
         <p style="margin:8px 0 0">
           Data from TeamRankings scrape + ESPN standings on disk. O/U situations are historically noisy; rest / after-win filters historically weak.
           Historical baselines are pooled TeamRankings situation rates; default window 2021–2026 (switch in the sidebar). Durable edges (ATS dogs, home favs) barely move vs 2007–2026.
-          V2 edge stack magnitudes for injury / late-season / fatigue / interim steam are locked research weights — not historical hit rates. News &amp; Coaching scored layers parked. Filter state saved in this browser (localStorage), not the URL. Regenerate with <code>python3 build_data.py</code>.
+          V3 Bet board overlays Miles/Chart/New Bot feeds when present (never invented). V2 edge stack magnitudes for injury / late-season / fatigue / interim steam are locked research weights — not historical hit rates. News &amp; Coaching scored layers parked. Attach feeds: <code>python3 attach_v3_feeds.py</code>. Filter state saved in this browser (localStorage), not the URL. Regenerate with <code>python3 build_data.py</code>.
         </p>
       </footer>
     </main>

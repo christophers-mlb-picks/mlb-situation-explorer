@@ -19,7 +19,7 @@
     minL10Wins: 0,
     maxL10Wins: 10,
     search: "",
-    tab: "heat",
+    tab: "bet",
     scatterMode: "situations", // situations | win_cover
     scatterX: "is_home_dog",
     scatterY: "is_away_dog",
@@ -46,6 +46,10 @@
     layerFatigue: true,
     layerSteam: true,
     minEdge: -20,
+    betLayerTrends: true,
+    betLayerChart: true,
+    betLayerNewbot: true,
+    betLayerMiles: true,
   };
 
   const $ = (sel, el = document) => el.querySelector(sel);
@@ -1370,7 +1374,414 @@
     return `<div class="edge-mini">${bits.join("")}</div>`;
   }
 
-  function renderToday() {
+
+  // ----- V3 Bet board -----
+  const ABBR_NORM = { TBR: "TB", TB: "TB", CWS: "CHW", CHW: "CHW", AZ: "ARI", ARI: "ARI", WAS: "WSH", WSH: "WSH", OAK: "ATH", ATH: "ATH", SFG: "SF", SF: "SF" };
+  function normAbbr(a) {
+    if (!a) return "";
+    const u = String(a).toUpperCase();
+    return ABBR_NORM[u] || u;
+  }
+  function parseAmerican(ml) {
+    if (ml == null || ml === "" || ml === "—") return null;
+    const n = parseInt(String(ml).replace("+", ""), 10);
+    return Number.isFinite(n) ? n : null;
+  }
+  function impliedPct(ml) {
+    const x = parseAmerican(ml);
+    if (x == null) return null;
+    if (x < 0) return (Math.abs(x) / (Math.abs(x) + 100)) * 100;
+    return (100 / (x + 100)) * 100;
+  }
+  function sidesMatch(a, b) {
+    if (a == null || b == null || a === "" || b === "") return false;
+    return normAbbr(a) === normAbbr(b) || String(a).toLowerCase() === String(b).toLowerCase();
+  }
+  function marketMatch(a, b) {
+    if (!a || !b || a === "none" || b === "none") return false;
+    return String(a).toUpperCase() === String(b).toUpperCase();
+  }
+
+  /** Trends disagreement lean — flags assist OR compute TR% vs DK implied (≥~8pp ML; ATS dog / home-fav-won't-cover). O/U off. */
+  function computeTrendsLean(g) {
+    const leans = [];
+    const flags = g.trends_flags || [];
+    for (const f of flags) {
+      const gapMl = f.gap_ml;
+      const gapAts = f.gap_ats;
+      const wn = f.wn || 0;
+      const an = f.an || 0;
+      const abbr = f.espn_abbr || null;
+      if (gapMl != null && wn >= 15 && gapMl >= 8) {
+        leans.push({
+          market: "ML",
+          side: abbr,
+          sideLabel: f.team || abbr,
+          gap: +gapMl.toFixed(1),
+          reason: `ML value ${gapMl >= 0 ? "+" : ""}${gapMl.toFixed(1)}pp vs DK (${f.combo})`,
+          source: "analyze_flags",
+          priced: true,
+          recency: "situation TR vs DK implied",
+        });
+      }
+      if (gapAts != null && an >= 15) {
+        if (!f.is_fav && gapAts >= 5) {
+          leans.push({
+            market: "RL",
+            side: abbr,
+            sideLabel: f.team || abbr,
+            gap: +gapAts.toFixed(1),
+            reason: `ATS dog +${gapAts.toFixed(1)}pp vs base (${f.combo})`,
+            source: "analyze_flags",
+            priced: true,
+            recency: "durable ATS-dog shape",
+          });
+        }
+        if (f.is_fav && gapAts <= -5) {
+          // home-fav / fav won't cover → lean opponent RL
+          const opp = f.is_home ? g.away_abbr : g.home_abbr;
+          leans.push({
+            market: "RL",
+            side: opp,
+            sideLabel: opp,
+            gap: +gapAts.toFixed(1),
+            reason: `Fav won't cover ATS ${gapAts.toFixed(1)}pp vs base (${f.combo})`,
+            source: "analyze_flags",
+            priced: true,
+            recency: "home-fav-won't-cover / fav ATS soft",
+          });
+        }
+      }
+      // fav overpriced ML → dog lean context
+      if (f.is_fav && gapMl != null && wn >= 15 && gapMl <= -8) {
+        const opp = f.is_home ? g.away_abbr : g.home_abbr;
+        leans.push({
+          market: "ML",
+          side: opp,
+          sideLabel: opp,
+          gap: +(-gapMl).toFixed(1),
+          reason: `Fav overpriced ${gapMl.toFixed(1)}pp — dog lean context`,
+          source: "analyze_flags",
+          priced: true,
+          recency: "priced disagreement",
+        });
+      }
+    }
+
+    // Compute from slate TR vs DK if no flag lean yet
+    if (!leans.length) {
+      for (const side of ["away", "home"]) {
+        const abbr = side === "away" ? g.away_abbr : g.home_abbr;
+        const ml = side === "away" ? g.dk_ml_away : g.dk_ml_home;
+        const imp = impliedPct(ml);
+        const isHome = side === "home";
+        const favNum = parseAmerican(g.dk_ml_home);
+        const dogNum = parseAmerican(g.dk_ml_away);
+        let isFav = null;
+        if (favNum != null && dogNum != null) {
+          // lower American = favorite
+          const homeIsFav = favNum < dogNum;
+          isFav = isHome ? homeIsFav : !homeIsFav;
+        }
+        if (isFav == null) continue;
+        const sc = isHome ? (isFav ? "is_home_fav" : "is_home_dog") : (isFav ? "is_away_fav" : "is_away_dog");
+        const winC = cell(abbr, sc, "win");
+        const atsC = cell(abbr, sc, "ats");
+        const baseAts = baseline(sc, "ats");
+        if (winC && (winC.n || 0) >= 15 && imp != null) {
+          const gap = +(winC.pct - imp).toFixed(1);
+          if (gap >= 8) {
+            leans.push({
+              market: "ML",
+              side: abbr,
+              sideLabel: abbr,
+              gap,
+              reason: `TR ${sc} ${winC.pct}% vs DK imp ${imp.toFixed(1)}% (${gap >= 0 ? "+" : ""}${gap}pp)`,
+              source: "slate_compute",
+              priced: true,
+              recency: "TR% vs DK implied",
+            });
+          }
+          if (isFav && gap <= -8) {
+            const opp = isHome ? g.away_abbr : g.home_abbr;
+            leans.push({
+              market: "ML",
+              side: opp,
+              sideLabel: opp,
+              gap: +(-gap).toFixed(1),
+              reason: `Fav overpriced TR ${winC.pct}% vs imp ${imp.toFixed(1)}%`,
+              source: "slate_compute",
+              priced: true,
+              recency: "priced disagreement",
+            });
+          }
+        }
+        if (atsC && (atsC.n || 0) >= 15 && baseAts != null) {
+          const gapA = +(atsC.pct - baseAts).toFixed(1);
+          if (!isFav && gapA >= 5) {
+            leans.push({
+              market: "RL",
+              side: abbr,
+              sideLabel: abbr,
+              gap: gapA,
+              reason: `ATS dog ${atsC.pct}% vs base ${baseAts}% (+${gapA}pp)`,
+              source: "slate_compute",
+              priced: true,
+              recency: "durable ATS-dog",
+            });
+          }
+          if (isFav && gapA <= -5) {
+            const opp = isHome ? g.away_abbr : g.home_abbr;
+            leans.push({
+              market: "RL",
+              side: opp,
+              sideLabel: opp,
+              gap: gapA,
+              reason: `Fav ATS soft ${atsC.pct}% vs base ${baseAts}% (${gapA}pp)`,
+              source: "slate_compute",
+              priced: true,
+              recency: "home-fav-won't-cover shape",
+            });
+          }
+        }
+      }
+    }
+
+    // Prefer strongest ML then RL; dedupe by market+side
+    const seen = new Set();
+    const uniq = [];
+    leans.sort((a, b) => (b.gap || 0) - (a.gap || 0) || (a.market === "ML" ? -1 : 1));
+    for (const L of leans) {
+      const k = `${L.market}|${normAbbr(L.side)}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      uniq.push(L);
+    }
+    const primary = uniq[0] || null;
+    return {
+      hasLean: !!primary,
+      lean: primary,
+      all: uniq,
+      ou: null, // O/U last / none by default
+    };
+  }
+
+  function milesOf(g) {
+    const m = g.miles || {};
+    return {
+      status: m.status || "stand_down",
+      true: m.true || "",
+      likely: m.likely || "",
+      kill: m.kill || "",
+      market: m.market || "none",
+      side: m.side == null ? null : m.side,
+    };
+  }
+
+  /** Locked overall tint rules */
+  function overallVisual(trends, miles) {
+    const st = miles.status || "stand_down";
+    if (st === "kill") return { tint: "gray", label: "pass", why: "Miles kill" };
+    if (!trends.hasLean) return { tint: "gray", label: "pass", why: "No Trends lean" };
+    const lean = trends.lean;
+    if (st === "clear") {
+      const sideOk = sidesMatch(lean.side, miles.side);
+      const mktOk = !miles.market || miles.market === "none" || marketMatch(lean.market, miles.market);
+      if (sideOk && mktOk) return { tint: "green", label: "lean", why: "Miles clear + Trends agree" };
+      return { tint: "gray", label: "pass", why: "Trends↔Miles conflict" };
+    }
+    // stand_down or watch
+    if (st === "watch") return { tint: "amber", label: "watch", why: "Trends lean · Miles watch" };
+    return { tint: "amber", label: "watch", why: "Trends lean · Miles stand_down (awaiting mark)" };
+  }
+
+  function milesChipTint(miles) {
+    if (miles.status === "clear") return "green";
+    if (miles.status === "watch") return "amber";
+    return "gray"; // kill or stand_down
+  }
+
+  function chartOf(g) {
+    const c = g.chart || {};
+    if (c.awaiting || !c.screen) {
+      return { awaiting: true, screen: null, note: c.note || "Chart: awaiting feed" };
+    }
+    return c;
+  }
+
+  function newbotOf(g) {
+    const n = g.newbot || {};
+    if (!n.present) return { present: false, note: n.note || "New Bot: no mark" };
+    return n;
+  }
+
+  function renderTrendsLayer(g, trends) {
+    const lean = trends.lean;
+    let chip = "gray";
+    let chipLabel = "pass";
+    let body = '<div class="muted">No actionable ML/RL disagreement (≥~8pp ML or durable ATS shapes). O/U off.</div>';
+    if (lean) {
+      chip = "amber";
+      chipLabel = `${lean.market} ${normAbbr(lean.side)}`;
+      body = `<div><strong>${lean.market} ${escapeHtml(lean.sideLabel || lean.side)}</strong> · ${escapeHtml(lean.reason)}</div>
+        <div class="muted" style="margin-top:4px">${lean.priced ? "priced" : "unpriced"} · ${escapeHtml(lean.recency || "")} · ${escapeHtml(lean.source || "")}</div>`;
+    }
+    // V2 edge_pp chips
+    let edgeHtml = "";
+    try {
+      const bits = [];
+      for (const abbr of [g.away_abbr, g.home_abbr]) {
+        const t = state.data.teams.find((x) => x.abbr === abbr);
+        if (!t) continue;
+        const edge = computeEdge(t);
+        bits.push(`<span class="edge-chip ${edge.edge_pp >= 0 ? "pos" : "neg"}"><span class="layer-name">${abbr}</span> ${fmtPp(edge.edge_pp)}</span>`);
+      }
+      if (bits.length) edgeHtml = `<div class="edge-chips">${bits.join("")}<span class="muted" style="font-size:0.68rem;margin-left:4px">V2 edge_pp</span></div>`;
+    } catch (_) {}
+    return layerHtml("Trends", chip, chipLabel, body + edgeHtml);
+  }
+
+  function renderChartLayer(g) {
+    const c = chartOf(g);
+    if (c.awaiting) {
+      return layerHtml("Chart", "amber", "awaiting", '<div class="muted">Chart: awaiting feed</div>');
+    }
+    const scr = c.screen || "red";
+    const chip = scr === "green" ? "green" : scr === "amber" ? "amber" : "gray";
+    const away = c.away || {};
+    const home = c.home || {};
+    const aw = typeof away === "object" ? away : {};
+    const ho = typeof home === "object" ? home : {};
+    const lines = [];
+    if (aw.abbr) lines.push(`${aw.abbr} Win% ${aw.win_pct != null ? (aw.win_pct * 100).toFixed(1) : "—"} · RD/G ${aw.rd_per_game != null ? Number(aw.rd_per_game).toFixed(2) : "—"} · ${aw.quadrant || "—"}`);
+    if (ho.abbr) lines.push(`${ho.abbr} Win% ${ho.win_pct != null ? (ho.win_pct * 100).toFixed(1) : "—"} · RD/G ${ho.rd_per_game != null ? Number(ho.rd_per_game).toFixed(2) : "—"} · ${ho.quadrant || "—"}`);
+    if (!lines.length && c.quadrant) lines.push(`quadrant ${c.quadrant} · RD/G ${c.rd_per_game != null ? Number(c.rd_per_game).toFixed(2) : "—"} · Win% ${c.win_pct != null ? (c.win_pct * 100).toFixed(1) : "—"}`);
+    const note = c.note ? `<div class="muted" style="margin-top:4px">${escapeHtml(c.note)}</div>` : "";
+    return layerHtml("Chart", chip, scr, `<div class="mono">${lines.map(escapeHtml).join("<br>")}</div>${note}`);
+  }
+
+  function renderNewbotLayer(g) {
+    const n = newbotOf(g);
+    if (!n.present) {
+      return layerHtml("New Bot", "gray", "none", '<div class="muted">New Bot: no mark</div>');
+    }
+    const st = n.status || "pass";
+    const chip = st === "watch" ? "amber" : "gray";
+    const kill = Array.isArray(n.kill) ? n.kill : (n.kill ? [n.kill] : []);
+    const kv = [
+      ["status", st],
+      ["market", n.market || "—"],
+      ["side", n.side || "—"],
+      ["model_p", n.model_p != null ? Number(n.model_p).toFixed(4) : "—"],
+      ["implied", n.implied != null ? Number(n.implied).toFixed(4) : "—"],
+      ["edge_pts", n.edge_pts != null ? Number(n.edge_pts).toFixed(2) : "—"],
+      ["kill", kill.length ? kill.join("; ") : "—"],
+    ];
+    const body = `<div class="bet-kv">${kv.map(([k,v]) => `<span>${k}</span><span>${escapeHtml(String(v))}</span>`).join("")}</div>` +
+      (n.note ? `<div class="muted" style="margin-top:4px">${escapeHtml(n.note)}</div>` : "");
+    return layerHtml("New Bot", chip, st, body);
+  }
+
+  function renderMilesLayer(g, miles) {
+    const chip = milesChipTint(miles);
+    const kv = [
+      ["status", miles.status],
+      ["market", miles.market || "none"],
+      ["side", miles.side == null ? "—": miles.side],
+      ["true", miles.true || "—"],
+      ["likely", miles.likely || "—"],
+      ["kill", miles.kill || "—"],
+    ];
+    return layerHtml("Miles", chip, miles.status, `<div class="bet-kv">${kv.map(([k,v]) => `<span>${k}</span><span>${escapeHtml(String(v))}</span>`).join("")}</div>`);
+  }
+
+  function layerHtml(name, chip, chipLabel, body) {
+    return `<div class="bet-layer" data-layer="${name.toLowerCase().replace(" ", "")}">
+      <div class="bet-layer-head">
+        <span class="bet-layer-name">${name}</span>
+        <span class="bet-layer-chip ${chip}">${escapeHtml(chipLabel)}</span>
+      </div>
+      <div class="body">${body}</div>
+    </div>`;
+  }
+
+  function escapeHtml(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function enrichBetGame(g) {
+    const trends = computeTrendsLean(g);
+    const miles = milesOf(g);
+    const overall = overallVisual(trends, miles);
+    return { g, trends, miles, overall, chart: chartOf(g), newbot: newbotOf(g) };
+  }
+
+  function renderBetBoard() {
+    const host = document.getElementById("bet-grid");
+    const singles = document.getElementById("singles-strip");
+    const dateEl = document.getElementById("bet-date");
+    if (!host) return;
+    const slate = state.data.slate;
+    if (!slate?.games?.length) {
+      host.innerHTML = '<div class="empty">No slate loaded.</div>';
+      if (singles) singles.innerHTML = "";
+      return;
+    }
+    if (dateEl) dateEl.textContent = slate.date || "";
+    const rows = (filteredSlateGames()).map(enrichBetGame);
+    // Singles: green then amber
+    const consider = rows.filter((r) => r.overall.tint === "green" || r.overall.tint === "amber");
+    consider.sort((a, b) => (a.overall.tint === "green" ? 0 : 1) - (b.overall.tint === "green" ? 0 : 1));
+    if (singles) {
+      if (!consider.length) {
+        singles.className = "singles-strip empty-singles";
+        singles.innerHTML = "<h3>Singles to consider</h3><div class=\"muted\">None yet — need Trends lean (amber) or Miles clear agreement (green).</div>";
+      } else {
+        singles.className = "singles-strip";
+        singles.innerHTML = `<h3>Singles to consider</h3><div class="singles-list">${consider.map((r) => {
+          const L = r.trends.lean;
+          return `<div class="single-row">
+            <span class="single-pill ${r.overall.tint}">${r.overall.label}</span>
+            <span class="match">${escapeHtml(r.g.name)}</span>
+            <span class="lean">${L ? `${L.market} ${normAbbr(L.side)}` : "—"}</span>
+            <span class="why">${escapeHtml(r.overall.why)}${L ? " · " + escapeHtml(L.reason) : ""}</span>
+          </div>`;
+        }).join("")}</div>`;
+      }
+    }
+
+    const showT = state.betLayerTrends !== false;
+    const showC = state.betLayerChart !== false;
+    const showN = state.betLayerNewbot !== false;
+    const showM = state.betLayerMiles !== false;
+
+    host.innerHTML = rows.map((r) => {
+      const g = r.g;
+      const layers = [];
+      if (showT) layers.push(renderTrendsLayer(g, r.trends));
+      if (showC) layers.push(renderChartLayer(g));
+      if (showN) layers.push(renderNewbotLayer(g));
+      if (showM) layers.push(renderMilesLayer(g, r.miles));
+      return `<article class="bet-card overall-${r.overall.tint}">
+        <div class="bet-card-head">
+          <div>
+            <div class="matchup">${escapeHtml(g.name)}</div>
+            <div class="odds">DK ${g.away_abbr} ${g.dk_ml_away || "—"} / ${g.home_abbr} ${g.dk_ml_home || "—"}
+              · ESPN ${g.espn_away_wp != null ? Number(g.espn_away_wp).toFixed(1) + "%" : "—"} / ${g.espn_home_wp != null ? Number(g.espn_home_wp).toFixed(1) + "%" : "—"}
+              · O/U ${g.total != null ? g.total : "—"}</div>
+          </div>
+          <span class="bet-overall-badge ${r.overall.tint}">${r.overall.label}</span>
+        </div>
+        <div class="bet-layers">${layers.join("")}</div>
+      </article>`;
+    }).join("");
+  }
+
+    function renderToday() {
     const panel = $("#today-panel");
     const el = $("#today-grid");
     const slate = state.data.slate;
@@ -1483,8 +1894,13 @@
     if (tab === "list") renderList();
     if (tab === "edge") renderEdgeBoard();
     if (tab === "today") renderToday();
+    if (tab === "bet") renderBetBoard();
     // always keep today finder panel in sync
     renderToday();
+    // keep bet board warm when on other tabs so singles stay current if revisited
+    if (tab !== "bet") {
+      try { renderBetBoard(); } catch (_) {}
+    }
     if (tab !== "edge") {
       // keep edge board warm when stacked? only when tab edge — already handled
     }
@@ -1747,6 +2163,18 @@
     });
     $("#unpin").addEventListener("click", () => {
       state.pinned = null;
+
+    const betToggle = (id, key) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.checked = state[key] !== false;
+      el.addEventListener("change", () => { state[key] = el.checked; renderBetBoard(); saveState(); });
+    };
+    betToggle("bet-layer-trends", "betLayerTrends");
+    betToggle("bet-layer-chart", "betLayerChart");
+    betToggle("bet-layer-newbot", "betLayerNewbot");
+    betToggle("bet-layer-miles", "betLayerMiles");
+
       $("#detail-bar").classList.remove("visible");
       renderList();
     });
@@ -1853,11 +2281,13 @@
     const slateNote = state.data.slate?.date
       ? `Slate: ${state.data.slate.date} (${state.data.slate.games.length} games)`
       : "No slate files found";
-    $("#meta-line").textContent = `Generated ${state.data.generated_at} · ${state.data.meta.n_teams} teams · ${state.data.meta.n_situations} situations · ${slateNote} · V2 edge stack (news/coaching parked)`;
+    $("#meta-line").textContent = `Generated ${state.data.generated_at} · ${state.data.meta.n_teams} teams · ${state.data.meta.n_situations} situations · ${slateNote} · V3 Bet board + V2 edge stack`;
 
     if (!state.data.slate?.games?.length) {
       const tb = $('.tabs button[data-tab="today"]');
       if (tb) tb.style.display = "none";
+      const bb = $('.tabs button[data-tab="bet"]');
+      if (bb) bb.style.display = "none";
     }
 
     renderAll();
