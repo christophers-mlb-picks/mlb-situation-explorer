@@ -50,6 +50,16 @@
     betLayerChart: true,
     betLayerNewbot: true,
     betLayerMiles: true,
+    bluffMode: "bluff",
+    bluffAway: false,
+    bluffHome: false,
+    bluffDkFav: true,
+    bluffDkDog: false,
+    bluffInjHeavy: false,
+    bluffInjAny: false,
+    bluffFatigue: false,
+    bluffSteam: false,
+    bluffChartLr: false,
   };
 
   const $ = (sel, el = document) => el.querySelector(sel);
@@ -93,6 +103,16 @@
       if (typeof o.layerFatigue === "boolean") state.layerFatigue = o.layerFatigue;
       if (typeof o.layerSteam === "boolean") state.layerSteam = o.layerSteam;
       if (typeof o.minEdge === "number") state.minEdge = o.minEdge;
+      if (o.bluffMode === "bluff" || o.bluffMode === "dog") state.bluffMode = o.bluffMode;
+      if (typeof o.bluffAway === "boolean") state.bluffAway = o.bluffAway;
+      if (typeof o.bluffHome === "boolean") state.bluffHome = o.bluffHome;
+      if (typeof o.bluffDkFav === "boolean") state.bluffDkFav = o.bluffDkFav;
+      if (typeof o.bluffDkDog === "boolean") state.bluffDkDog = o.bluffDkDog;
+      if (typeof o.bluffInjHeavy === "boolean") state.bluffInjHeavy = o.bluffInjHeavy;
+      if (typeof o.bluffInjAny === "boolean") state.bluffInjAny = o.bluffInjAny;
+      if (typeof o.bluffFatigue === "boolean") state.bluffFatigue = o.bluffFatigue;
+      if (typeof o.bluffSteam === "boolean") state.bluffSteam = o.bluffSteam;
+      if (typeof o.bluffChartLr === "boolean") state.bluffChartLr = o.bluffChartLr;
       if (typeof o.yearLo === "number") state.yearLo = o.yearLo;
       if (typeof o.yearHi === "number") state.yearHi = o.yearHi;
       if (o.baselineWindow && typeof o.yearLo !== "number") {
@@ -139,6 +159,16 @@
       minEdge: state.minEdge,
       yearLo: state.yearLo,
       yearHi: state.yearHi,
+      bluffMode: state.bluffMode,
+      bluffAway: state.bluffAway,
+      bluffHome: state.bluffHome,
+      bluffDkFav: state.bluffDkFav,
+      bluffDkDog: state.bluffDkDog,
+      bluffInjHeavy: state.bluffInjHeavy,
+      bluffInjAny: state.bluffInjAny,
+      bluffFatigue: state.bluffFatigue,
+      bluffSteam: state.bluffSteam,
+      bluffChartLr: state.bluffChartLr,
     };
     try {
       localStorage.setItem("mlb-tr-explorer", JSON.stringify(o));
@@ -1883,6 +1913,311 @@
     return `<details class="bet-advanced-layers"><summary>Layer detail</summary><div class="bet-layers">${layers.join("")}</div></details>`;
   }
 
+
+  // ----- Bluff scan (quality filter → fade-candidates; desk tree still gates) -----
+  // Miles/Kane locks: injury = official IL tiers only (never 0–100);
+  // fatigue = schedule/rest; steam = interim RD/G snapshot labeled;
+  // bluff = DK still ML-fav despite selected hits; not auto-bet;
+  // Miles kill/stand_down → gray; New Bot edge must clear before size; Kane sizes fades smaller.
+
+  function teamByAbbr(abbr) {
+    const n = normAbbr(abbr);
+    const teams = state.data?.teams || [];
+    return teams.find((t) => normAbbr(t.abbr) === n) || null;
+  }
+
+  function edgePackForSide(g, abbr) {
+    const n = normAbbr(abbr);
+    const eba = g.edge_by_abbr || {};
+    let pack = null;
+    for (const [k, v] of Object.entries(eba)) {
+      if (normAbbr(k) === n) { pack = v; break; }
+    }
+    const t = teamByAbbr(abbr);
+    return {
+      injury: (pack && (pack.injury || pack.edge_injury)) || t?.edge_injury || {},
+      fatigue: (pack && (pack.fatigue || pack.edge_fatigue)) || t?.edge_fatigue || {},
+      steam: (pack && (pack.steam || pack.edge_steam)) || t?.edge_steam || {},
+    };
+  }
+
+  /** Official IL severity only: none | light (recent non-SP) | heavy (SP on IL/susp or near injury cap). Never a 0–100 score. */
+  function injuryTierForSide(g, abbr, side) {
+    const pack = edgePackForSide(g, abbr);
+    const ei = pack.injury || {};
+    const inj = g.injury || {};
+    const spGame = side === "home" ? !!inj.home_sp_on_il : !!inj.away_sp_on_il;
+    const spEdge = !!ei.sp_on_il_or_susp;
+    const capped = !!ei.capped; // near injury-magnitude cap — not a health %
+    const heavy = spGame || spEdge || capped;
+    const recent = Array.isArray(ei.recent_non_sp) ? ei.recent_non_sp : [];
+    const parts = Array.isArray(ei.parts) ? ei.parts : [];
+    const placements = Array.isArray(inj.recent_il_placements) ? inj.recent_il_placements : [];
+    const teamHit = placements.some((p) => normAbbr(p.team_abbr) === normAbbr(abbr));
+    const light = !heavy && (recent.length > 0 || parts.length > 0 || (!!inj.toggle_match && teamHit));
+    if (heavy) {
+      const who = ei.sp_name || (side === "home" ? inj.home_sp_name : inj.away_sp_name) || null;
+      return {
+        tier: "heavy",
+        anyHit: true,
+        label: who ? `injury heavy (SP IL: ${who})` : (capped ? "injury heavy (near IL cap)" : "injury heavy (SP on IL)"),
+      };
+    }
+    if (light) {
+      const name = recent[0]?.name || parts[0]?.label || "recent IL";
+      return { tier: "light", anyHit: true, label: `injury light (${name})` };
+    }
+    return { tier: "none", anyHit: false, label: "injury none" };
+  }
+
+  function fatigueOnForSide(g, abbr) {
+    const ef = edgePackForSide(g, abbr).fatigue || {};
+    if (!ef.trigger) return { on: false, label: null };
+    const reasons = Array.isArray(ef.reasons) ? ef.reasons.filter(Boolean) : [];
+    return { on: true, label: reasons.length ? `fatigue (${reasons.join(", ")})` : "fatigue (schedule/rest)" };
+  }
+
+  function steamOnForSide(g, abbr) {
+    const es = edgePackForSide(g, abbr).steam || {};
+    if (!es.trigger) return { on: false, label: null, rd: es.rd_per_game };
+    const rd = es.rd_per_game;
+    const rdTxt = rd != null && Number.isFinite(+rd) ? ` RD/G ${(+rd).toFixed(2)}` : "";
+    return {
+      on: true,
+      rd,
+      label: `steam interim${rdTxt} (snapshot; not rolling)`,
+    };
+  }
+
+  function chartSideOf(g, abbr, side) {
+    const c = g.chart || {};
+    if (c.awaiting || !c.screen) return null;
+    const direct = c[side];
+    if (direct && typeof direct === "object" && direct.abbr) return direct;
+    for (const sk of ["away", "home"]) {
+      const s = c[sk];
+      if (s && typeof s === "object" && normAbbr(s.abbr) === normAbbr(abbr)) return s;
+    }
+    return null;
+  }
+
+  function chartLrOrDeficit(g, abbr, side) {
+    const s = chartSideOf(g, abbr, side);
+    if (!s) return { on: false, available: !!(g.chart && !g.chart.awaiting && g.chart.screen), label: null };
+    const q = s.quadrant || "";
+    const rd = s.rd_per_game;
+    const lr = q === "LR";
+    const deficit = rd != null && Number.isFinite(+rd) && +rd < 0;
+    if (!lr && !deficit) return { on: false, available: true, label: null };
+    const bits = [];
+    if (lr) bits.push("LR");
+    if (deficit) bits.push(`RD deficit ${(+rd).toFixed(2)}`);
+    return { on: true, available: true, label: `chart ${bits.join(" · ")}` };
+  }
+
+  function dkRoles(g) {
+    const favAbbr = g.fav_abbr ? normAbbr(g.fav_abbr) : null;
+    const dogAbbr = g.dog_abbr ? normAbbr(g.dog_abbr) : null;
+    let homeIsFav = null;
+    const h = parseAmerican(g.dk_ml_home);
+    const a = parseAmerican(g.dk_ml_away);
+    if (h != null && a != null) {
+      if (h < a) homeIsFav = true;
+      else if (a < h) homeIsFav = false;
+      else homeIsFav = null; // pick'em
+    }
+    return { favAbbr, dogAbbr, homeIsFav };
+  }
+
+  function sideQualities(g, side) {
+    const abbr = side === "home" ? g.home_abbr : g.away_abbr;
+    const roles = dkRoles(g);
+    const n = normAbbr(abbr);
+    let isFav = false;
+    let isDog = false;
+    if (roles.favAbbr && roles.favAbbr === n) isFav = true;
+    if (roles.dogAbbr && roles.dogAbbr === n) isDog = true;
+    if (!isFav && !isDog && roles.homeIsFav != null) {
+      isFav = side === "home" ? roles.homeIsFav : !roles.homeIsFav;
+      isDog = !isFav;
+    }
+    // pick'em: neither strictly fav/dog unless fav_abbr set
+    const inj = injuryTierForSide(g, abbr, side);
+    const fat = fatigueOnForSide(g, abbr);
+    const steam = steamOnForSide(g, abbr);
+    const chart = chartLrOrDeficit(g, abbr, side);
+    return {
+      side,
+      abbr,
+      isAway: side === "away",
+      isHome: side === "home",
+      isFav,
+      isDog,
+      injury: inj,
+      fatigue: fat,
+      steam,
+      chart,
+    };
+  }
+
+  function bluffHitFiltersActive() {
+    // Need at least one hit quality — bare DK-fav alone is not a bluff scan
+    return !!(
+      state.bluffInjHeavy || state.bluffInjAny ||
+      state.bluffFatigue || state.bluffSteam || state.bluffChartLr
+    );
+  }
+  function bluffFiltersActive() {
+    return bluffHitFiltersActive();
+  }
+
+  /** Selected qualities must all match this side. Mode gates fav vs dog pricing. */
+  function sideMatchesBluffFilters(q) {
+    const mode = state.bluffMode === "dog" ? "dog" : "bluff";
+    // Mode lock: bluff = DK still ML-fav; dog mode = qualities on dog
+    if (mode === "bluff" && !q.isFav) return false;
+    if (mode === "dog" && !q.isDog) return false;
+
+    const roleChecked = state.bluffAway || state.bluffHome;
+    if (roleChecked) {
+      const ok = (state.bluffAway && q.isAway) || (state.bluffHome && q.isHome);
+      if (!ok) return false;
+    }
+    const priceChecked = state.bluffDkFav || state.bluffDkDog;
+    if (priceChecked) {
+      const ok = (state.bluffDkFav && q.isFav) || (state.bluffDkDog && q.isDog);
+      if (!ok) return false;
+    }
+    if (state.bluffInjHeavy && q.injury.tier !== "heavy") return false;
+    if (state.bluffInjAny && !q.injury.anyHit) return false;
+    if (state.bluffFatigue && !q.fatigue.on) return false;
+    if (state.bluffSteam && !q.steam.on) return false;
+    if (state.bluffChartLr && !q.chart.on) return false;
+    return true;
+  }
+
+  function firedQualityLabels(q) {
+    const out = [];
+    out.push(q.isAway ? "away" : "home");
+    out.push(q.isFav ? "DK fav" : (q.isDog ? "DK dog" : "DK even"));
+    if (q.injury.anyHit) out.push(q.injury.label);
+    if (q.fatigue.on) out.push(q.fatigue.label);
+    if (q.steam.on) out.push(q.steam.label);
+    if (q.chart.on) out.push(q.chart.label);
+    return out;
+  }
+
+  function bluffOneLiner(q) {
+    const hits = [];
+    if (q.injury.anyHit) hits.push(q.injury.tier === "heavy" ? "injury heavy" : "injury hit");
+    if (q.fatigue.on) hits.push("fatigue");
+    if (q.steam.on) hits.push("steam");
+    if (q.chart.on) hits.push("chart LR/deficit");
+    const hitTxt = hits.length ? hits.join(" + ") : "selected role";
+    if (q.isFav) return `DK still fav despite ${hitTxt} — fade-candidate (not a lock)`;
+    return `DK dog with ${hitTxt} — quality match (not a lock)`;
+  }
+
+  /** Desk tint for candidate row: Miles kill/stand_down → gray; overall from tree. */
+  function bluffDeskTint(enriched) {
+    if (!enriched) return { tint: "gray", label: "pass" };
+    const miles = enriched.miles || {};
+    const st = miles.status || "stand_down";
+    if (st === "kill" || st === "stand_down") {
+      return { tint: "gray", label: st === "kill" ? "pass · Miles kill" : "pass · Miles stand_down" };
+    }
+    const t = enriched.overall?.tint || "gray";
+    const lab = t === "green" ? "green" : t === "amber" ? "watch" : "pass";
+    return { tint: t, label: lab };
+  }
+
+  function newbotClearsForSize(enriched) {
+    const n = enriched?.newbot;
+    if (!n || !n.present) return false;
+    // Kane: New Bot edge must clear before any size — treat watch/clear-ish with edge as cleared; kill/none = no
+    const st = (n.status || "").toLowerCase();
+    if (st === "kill" || st === "pass" || st === "none") return false;
+    if (Array.isArray(n.kill) && n.kill.filter(Boolean).length) return false;
+    if (n.kill && !Array.isArray(n.kill) && String(n.kill).trim()) return false;
+    // edge_pts present and positive, or status watch
+    if (n.edge_pts != null && Number(n.edge_pts) > 0) return true;
+    return st === "watch" || st === "clear" || st === "play";
+  }
+
+  function collectBluffMatches(enrichedRows) {
+    const out = [];
+    if (!bluffFiltersActive()) return out;
+    for (const r of enrichedRows) {
+      const g = r.g;
+      for (const side of ["away", "home"]) {
+        const q = sideQualities(g, side);
+        if (!sideMatchesBluffFilters(q)) continue;
+        const desk = bluffDeskTint(r);
+        const nbOk = newbotClearsForSize(r);
+        out.push({
+          g,
+          q,
+          enriched: r,
+          desk,
+          nbOk,
+          quals: firedQualityLabels(q),
+          line: bluffOneLiner(q),
+        });
+      }
+    }
+    return out;
+  }
+
+  function chartFeedOffered() {
+    const games = state.data?.slate?.games || [];
+    return games.some((g) => g.chart && !g.chart.awaiting && g.chart.screen);
+  }
+
+  function renderBluffScan(enrichedRows) {
+    const host = document.getElementById("bluff-results");
+    const wrap = document.getElementById("bluff-scan");
+    const chartWrap = document.getElementById("bluff-chart-wrap");
+    if (!host || !wrap) return;
+    const offered = chartFeedOffered();
+    if (chartWrap) chartWrap.style.display = offered ? "" : "none";
+    if (!offered && state.bluffChartLr) state.bluffChartLr = false;
+
+    if (!bluffFiltersActive()) {
+      host.innerHTML = '<div class="bluff-results-empty">Select at least one hit (injury / fatigue / steam / chart) — Bluff lists sides DK still prices as ML fav despite those hits. Fade-candidates only (Kane: smaller size); Miles kill/stand_down stays gray; New Bot edge must clear before any size. Not auto-bet.</div>';
+      return;
+    }
+    const matches = collectBluffMatches(enrichedRows);
+    if (!matches.length) {
+      const mode = state.bluffMode === "dog" ? "dog" : "fav";
+      host.innerHTML = `<div class="bluff-results-empty">No ${mode} sides on this slate match the selected qualities. Honest zero — not a missing feed.</div>`;
+      return;
+    }
+    const modeLab = state.bluffMode === "dog" ? "dog quality matches" : "bluff fade-candidates";
+    host.innerHTML = `<div class="bluff-results-count">${matches.length} ${modeLab}</div>` + matches.map((m) => {
+      const g = m.g;
+      const q = m.q;
+      const ml = `ML ${g.away_abbr} ${g.dk_ml_away || "—"} / ${g.home_abbr} ${g.dk_ml_home || "—"}`;
+      const sizeNote = m.nbOk
+        ? (m.desk.tint === "gray" ? " · Kane: NB edge ok but Miles gray — no size" : " · Kane: NB edge clear · fade size smaller")
+        : " · Kane: New Bot edge not clear — no size yet";
+      const qHtml = m.quals.map((lab) => {
+        const hit = /injury|fatigue|steam|chart/i.test(lab);
+        return `<span class="q${hit ? " hit" : ""}">${escapeHtml(lab)}</span>`;
+      }).join("");
+      return `<div class="bluff-row tint-${m.desk.tint}">
+        <div class="bluff-row-top">
+          <span class="match">${escapeHtml(g.name)}</span>
+          <span class="side-pill">${escapeHtml(normAbbr(q.abbr))} ${q.isFav ? "fav" : "dog"}</span>
+          <span class="odds">${escapeHtml(ml)}</span>
+          <span class="desk-pill ${m.desk.tint}" title="Desk tree tint">${escapeHtml(m.desk.label)}</span>
+        </div>
+        <div class="bluff-quals">${qHtml}</div>
+        <div class="bluff-line">${escapeHtml(m.line)}${escapeHtml(sizeNote)}</div>
+      </div>`;
+    }).join("");
+  }
+
+
     function enrichBetGame(g) {
     const trends = computeTrendsLean(g);
     const miles = milesOf(g);
@@ -1899,10 +2234,13 @@
     if (!slate?.games?.length) {
       host.innerHTML = '<div class="empty">No slate loaded.</div>';
       if (singles) singles.innerHTML = "";
+      const br = document.getElementById("bluff-results");
+      if (br) br.innerHTML = '<div class="bluff-results-empty">No slate loaded.</div>';
       return;
     }
     if (dateEl) dateEl.textContent = slate.date || "";
     const rows = (filteredSlateGames()).map(enrichBetGame);
+    try { renderBluffScan(rows); } catch (err) { console.warn("bluff scan", err); }
     // Singles: green then amber
     const consider = rows.filter((r) => r.overall.tint === "green" || r.overall.tint === "amber");
     consider.sort((a, b) => (a.overall.tint === "green" ? 0 : 1) - (b.overall.tint === "green" ? 0 : 1));
@@ -2349,6 +2687,58 @@
     betToggle("bet-layer-chart", "betLayerChart");
     betToggle("bet-layer-newbot", "betLayerNewbot");
     betToggle("bet-layer-miles", "betLayerMiles");
+    // Bluff scan quality filters
+    const bluffToggle = (id, key) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.checked = !!state[key];
+      el.addEventListener("change", () => {
+        state[key] = el.checked;
+        // Bluff mode defaults price gate to DK fav; dog mode to DK dog — keep checkboxes honest
+        if (key === "bluffMode") return;
+        renderBetBoard();
+        saveState();
+      });
+    };
+    bluffToggle("bluff-away", "bluffAway");
+    bluffToggle("bluff-home", "bluffHome");
+    bluffToggle("bluff-dk-fav", "bluffDkFav");
+    bluffToggle("bluff-dk-dog", "bluffDkDog");
+    bluffToggle("bluff-inj-heavy", "bluffInjHeavy");
+    bluffToggle("bluff-inj-any", "bluffInjAny");
+    bluffToggle("bluff-fatigue", "bluffFatigue");
+    bluffToggle("bluff-steam", "bluffSteam");
+    bluffToggle("bluff-chart-lr", "bluffChartLr");
+    const modeBluff = document.getElementById("bluff-mode-bluff");
+    const modeDog = document.getElementById("bluff-mode-dog");
+    const syncModeRadios = () => {
+      if (modeBluff) modeBluff.checked = state.bluffMode !== "dog";
+      if (modeDog) modeDog.checked = state.bluffMode === "dog";
+    };
+    syncModeRadios();
+    const onMode = (mode) => {
+      state.bluffMode = mode;
+      if (mode === "bluff") {
+        state.bluffDkFav = true;
+        state.bluffDkDog = false;
+        const f = document.getElementById("bluff-dk-fav");
+        const d = document.getElementById("bluff-dk-dog");
+        if (f) f.checked = true;
+        if (d) d.checked = false;
+      } else {
+        state.bluffDkDog = true;
+        state.bluffDkFav = false;
+        const f = document.getElementById("bluff-dk-fav");
+        const d = document.getElementById("bluff-dk-dog");
+        if (f) f.checked = false;
+        if (d) d.checked = true;
+      }
+      syncModeRadios();
+      renderBetBoard();
+      saveState();
+    };
+    if (modeBluff) modeBluff.addEventListener("change", () => { if (modeBluff.checked) onMode("bluff"); });
+    if (modeDog) modeDog.addEventListener("change", () => { if (modeDog.checked) onMode("dog"); });
     const adv = document.getElementById("advanced-filters");
     if (adv) {
       adv.addEventListener("toggle", () => {
@@ -2402,6 +2792,19 @@
     setChk("layer-late", state.layerLate);
     setChk("layer-fatigue", state.layerFatigue);
     setChk("layer-steam", state.layerSteam);
+    setChk("bluff-away", state.bluffAway);
+    setChk("bluff-home", state.bluffHome);
+    setChk("bluff-dk-fav", state.bluffDkFav);
+    setChk("bluff-dk-dog", state.bluffDkDog);
+    setChk("bluff-inj-heavy", state.bluffInjHeavy);
+    setChk("bluff-inj-any", state.bluffInjAny);
+    setChk("bluff-fatigue", state.bluffFatigue);
+    setChk("bluff-steam", state.bluffSteam);
+    setChk("bluff-chart-lr", state.bluffChartLr);
+    const mb = document.getElementById("bluff-mode-bluff");
+    const md = document.getElementById("bluff-mode-dog");
+    if (mb) mb.checked = state.bluffMode !== "dog";
+    if (md) md.checked = state.bluffMode === "dog";
     const minEdgeEl2 = $("#min-edge");
     if (minEdgeEl2) {
       minEdgeEl2.value = state.minEdge;

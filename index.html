@@ -296,6 +296,33 @@
             <label class="toggle"><input type="checkbox" id="bet-layer-miles" checked /> Miles</label>
           </div>
         </details>
+        <aside class="bluff-scan" id="bluff-scan" aria-label="Bluff scan quality filter">
+          <div class="bluff-scan-head">
+            <h3>Bluff scan</h3>
+            <span class="hint">Overconfident-market filter · not a lock · desk tree still gates</span>
+          </div>
+          <div class="bluff-mode-row" role="radiogroup" aria-label="Scan mode">
+            <label class="toggle"><input type="radio" name="bluff-mode" id="bluff-mode-bluff" value="bluff" checked /> Bluff (qualities on DK fav)</label>
+            <label class="toggle"><input type="radio" name="bluff-mode" id="bluff-mode-dog" value="dog" /> Qualities match dog</label>
+          </div>
+          <div class="bluff-filters" id="bluff-filters">
+            <span class="bluff-group-label">Role</span>
+            <label class="toggle"><input type="checkbox" id="bluff-away" /> Away</label>
+            <label class="toggle"><input type="checkbox" id="bluff-home" /> Home</label>
+            <label class="toggle"><input type="checkbox" id="bluff-dk-fav" checked /> DK Favorite</label>
+            <label class="toggle"><input type="checkbox" id="bluff-dk-dog" /> DK Dog</label>
+            <span class="bluff-group-label">Hits</span>
+            <label class="toggle"><input type="checkbox" id="bluff-inj-heavy" /> Injury heavy</label>
+            <label class="toggle"><input type="checkbox" id="bluff-inj-any" /> Injury any official hit</label>
+            <label class="toggle"><input type="checkbox" id="bluff-fatigue" /> Fatigue on</label>
+            <label class="toggle"><input type="checkbox" id="bluff-steam" /> Steam on</label>
+            <label class="toggle" id="bluff-chart-wrap"><input type="checkbox" id="bluff-chart-lr" /> Chart LR / RD-deficit</label>
+          </div>
+          <p class="bluff-help" id="bluff-help">
+            Injury = official IL tiers only (none / light recent non-SP / heavy SP-on-IL or near cap) — never a 0–100 health dial. Fatigue = schedule/rest only. Steam = interim RD/G&gt;0 snapshot (labeled). Hits list <strong>fade-candidates</strong> only (Kane: smaller size); Miles kill/stand_down stays gray; New Bot edge must clear before any size. Not auto-bet — desk tree still gates.
+          </p>
+          <div class="bluff-results" id="bluff-results"></div>
+        </aside>
         <div class="singles-strip" id="singles-strip"></div>
         <div class="bet-grid" id="bet-grid"></div>
       </section>
