@@ -15,7 +15,13 @@
     <aside class="sidebar">
       <div class="brand">
         <h1>MLB Situation Explorer</h1>
-        <div class="sub">V3 Bet board: one slate card · Trends · Chart · New Bot · Miles. Singles-first. No lock cards / no 90% parlays. Edge stack filters still available.</div>
+        <div class="sub">DK line → desk tree → PASS / WATCH / green · Miles last gate. Singles first.</div>
+      </div>
+      <div class="bet-advanced-hint control-block" id="bet-advanced-hint" hidden>
+        <div class="sub" style="margin:0;font-size:11px;line-height:1.4">Situation mazes, edge stack, and heatmaps live on other tabs. Expand Advanced below if you need filters on this screen.</div>
+        <details class="advanced-filters" id="advanced-filters">
+          <summary>Advanced · filters &amp; edge stack</summary>
+        </details>
       </div>
 
       <div class="control-block">
@@ -27,7 +33,7 @@
         </div>
       </div>
 
-      <div class="control-block">
+      <div class="control-block explorer-only">
         <h3>Situations</h3>
         <div class="preset-row">
           <button type="button" data-preset="all">All</button>
@@ -40,7 +46,7 @@
         <div class="sit-list" id="sit-list"></div>
       </div>
 
-      <div class="control-block">
+      <div class="control-block explorer-only">
         <h3>Streak filters</h3>
         <div class="row">
           <label>Min W streak</label>
@@ -56,7 +62,7 @@
         <label class="toggle"><input type="checkbox" id="include-l" checked /> Include losing-streak teams</label>
       </div>
 
-      <div class="control-block">
+      <div class="control-block explorer-only">
         <h3>Last 10</h3>
         <div class="preset-row">
           <button type="button" data-l10="any">Any</button>
@@ -76,7 +82,7 @@
         </div>
       </div>
 
-      <div class="control-block">
+      <div class="control-block explorer-only">
         <h3>Sample & threshold</h3>
         <div class="row">
           <label>Min N</label>
@@ -108,7 +114,7 @@
       </div>
 
 
-      <div class="control-block" id="edge-stack-controls">
+      <div class="control-block explorer-only" id="edge-stack-controls">
         <h3>V2 Edge stack</h3>
         <label class="toggle"><input type="checkbox" id="edge-stack-on" checked /> Edge stack mode (score teams)</label>
         <div class="sub" style="margin-top:4px;font-size:11px;color:var(--muted);line-height:1.35">
@@ -135,7 +141,7 @@
         </div>
       </div>
 
-      <div class="control-block">
+      <div class="control-block explorer-only">
         <h3>Today’s slate</h3>
         <label class="toggle"><input type="checkbox" id="today-only" /> Only situations true for today’s games</label>
         <label class="toggle"><input type="checkbox" id="rd-surplus-dog" /> Home dog + RD/G&gt;0 (2026 snapshot)</label>
@@ -261,55 +267,40 @@
       <section class="panel view-panel" data-view="bet">
         <div class="panel-title">
           <h2>Bet board <span id="bet-date" style="color:var(--muted);font-weight:500"></span></h2>
-          <span class="hint">Singles first · four toggleable layers · no lock cards</span>
+          <span class="hint">DK → desk → PASS / WATCH / green · Miles last gate</span>
         </div>
-        <div class="bet-help" id="bet-help">
-          <strong>Overall tint</strong> (Miles is last gate):
-          <span class="tint-swatch green">GREEN</span> only via Miles <code>clear</code> + Trends lean matches Miles side/market ·
-          <span class="tint-swatch amber">WATCH</span> Trends lean + Miles <code>watch</code> ·
-          <span class="tint-swatch gray">PASS</span> Miles <code>kill</code> or <code>stand_down</code> (no path around Miles to green), no Trends lean, or Trends↔Miles conflict.
-          Show Miles <code>kill</code> string on that branch. O/U Trends off by default. Chart / New Bot are optional feeds — never invented.
-        </div>
-        <div class="bet-flow-legend" id="bet-flow-legend" aria-label="Decision tree legend">
-          <div class="bet-flow-title">Decision tree <span class="muted">(once per slate · our process, not invented)</span></div>
+        <div class="bet-flow-legend compact" id="bet-flow-legend" aria-label="Decision tree legend">
           <div class="bet-flow-row">
-            <div class="flow-node slate">1 · Slate game</div>
+            <div class="flow-node slate">DK line</div>
             <span class="flow-arrow" aria-hidden="true">→</span>
-            <div class="flow-node trends">2 · Trends vs DK<br/><span class="flow-sub">lean ML/RL · or pass</span></div>
+            <div class="flow-node trends">Trends</div>
             <span class="flow-arrow" aria-hidden="true">→</span>
-            <div class="flow-node chart">3 · Chart<br/><span class="flow-sub">green / amber / red</span></div>
+            <div class="flow-node chart">Chart</div>
             <span class="flow-arrow" aria-hidden="true">→</span>
-            <div class="flow-node newbot">4 · New Bot<br/><span class="flow-sub">pass / watch · edge / kill</span></div>
+            <div class="flow-node newbot">New Bot</div>
             <span class="flow-arrow" aria-hidden="true">→</span>
-            <div class="flow-node miles">5 · Miles <em>(last gate)</em><br/><span class="flow-sub">clear→green · watch→WATCH · kill|stand_down→PASS</span></div>
+            <div class="flow-node miles">Miles <em>last gate</em></div>
             <span class="flow-arrow" aria-hidden="true">→</span>
-            <div class="flow-node compress">6 · Compress<br/><span class="flow-sub"><span class="tint-swatch gray">PASS</span> <span class="tint-swatch amber">WATCH</span> <span class="tint-swatch green">GREEN</span></span></div>
+            <div class="flow-node compress"><span class="tint-swatch gray">PASS</span> <span class="tint-swatch amber">WATCH</span> <span class="tint-swatch green">GREEN</span></div>
           </div>
-          <div class="bet-flow-kills">
-            <strong>Kill / pass branches · Miles last gate</strong>
-            <ul>
-              <li><code>Miles kill</code> → overall <span class="tint-swatch gray">PASS</span> (show kill string on branch)</li>
-              <li><code>Miles stand_down</code> → overall <span class="tint-swatch gray">PASS</span> — no path around Miles to green</li>
-              <li><code>Miles watch</code> + Trends lean → <span class="tint-swatch amber">WATCH</span></li>
-              <li><code>Miles clear</code> + Trends side/market match → <span class="tint-swatch green">GREEN</span> (only green path)</li>
-              <li>No Trends lean → <span class="tint-swatch gray">PASS</span></li>
-              <li>Trends ↔ Miles side/market conflict → <span class="tint-swatch gray">PASS</span></li>
-              <li>New Bot <code>kill</code> criteria (when present) shown on card — advisory, not auto overall kill</li>
-              <li>Chart <span class="tint-swatch red">red</span> = caution, not auto-kill</li>
-            </ul>
+          <div class="bet-flow-kills compact-kills">
+            Miles <code>clear</code>+Trends match → green · <code>watch</code>+lean → WATCH · <code>kill</code>/<code>stand_down</code>/conflict/no lean → PASS
           </div>
         </div>
-        <div class="bet-layer-toggles" id="bet-layer-toggles">
-          <label class="toggle"><input type="checkbox" id="bet-layer-trends" checked /> Trends</label>
-          <label class="toggle"><input type="checkbox" id="bet-layer-chart" checked /> Chart</label>
-          <label class="toggle"><input type="checkbox" id="bet-layer-newbot" checked /> New Bot</label>
-          <label class="toggle"><input type="checkbox" id="bet-layer-miles" checked /> Miles</label>
-        </div>
+        <details class="bet-layer-toggles-wrap" id="bet-layer-toggles-wrap">
+          <summary>Layer chips · show / hide</summary>
+          <div class="bet-layer-toggles" id="bet-layer-toggles">
+            <label class="toggle"><input type="checkbox" id="bet-layer-trends" checked /> Trends</label>
+            <label class="toggle"><input type="checkbox" id="bet-layer-chart" checked /> Chart</label>
+            <label class="toggle"><input type="checkbox" id="bet-layer-newbot" checked /> New Bot</label>
+            <label class="toggle"><input type="checkbox" id="bet-layer-miles" checked /> Miles</label>
+          </div>
+        </details>
         <div class="singles-strip" id="singles-strip"></div>
         <div class="bet-grid" id="bet-grid"></div>
       </section>
 
-      <section class="panel" id="today-panel">
+      <section class="panel explorer-today" id="today-panel">
         <div class="panel-title">
           <h2>Today’s slate <span id="today-date" style="color:var(--muted);font-weight:500"></span></h2>
           <span class="hint">DK dog / fav vs strong TR home-dog or away-dog · triples when ESPN also favors the dog</span>
@@ -329,9 +320,7 @@
       <footer>
         <div id="meta-line"></div>
         <p style="margin:8px 0 0">
-          Data from TeamRankings scrape + ESPN standings on disk. O/U situations are historically noisy; rest / after-win filters historically weak.
-          Historical baselines are pooled TeamRankings situation rates; default window 2021–2026 (switch in the sidebar). Durable edges (ATS dogs, home favs) barely move vs 2007–2026.
-          V3 Bet board overlays Miles/Chart/New Bot feeds when present (never invented). V2 edge stack magnitudes for injury / late-season / fatigue / interim steam are locked research weights — not historical hit rates. News &amp; Coaching scored layers parked. Attach feeds: <code>python3 attach_v3_feeds.py</code>. Filter state saved in this browser (localStorage), not the URL. Regenerate with <code>python3 build_data.py</code>.
+          TR + ESPN on disk. Miles last gate (never invent marks). Edge stack on Edge tab. Attach: <code>python3 attach_v3_feeds.py</code> · rebuild: <code>python3 build_data.py</code>.
         </p>
       </footer>
     </main>

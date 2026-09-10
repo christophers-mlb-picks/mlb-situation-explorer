@@ -398,45 +398,120 @@ footer {
 .badge.parked { color: var(--muted); opacity: 0.7; }
 
 /* ===== V3 Bet board ===== */
-.bet-help {
-  font-size: 0.78rem;
-  color: var(--muted);
-  line-height: 1.45;
-  margin: 0 0 12px;
-  padding: 10px 12px;
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 10px;
+/* Thin “Bloomberg for DK” default — desk tree + badge + kill line */
+
+.bet-advanced-hint[hidden] { display: none !important; }
+.bet-advanced-hint .advanced-filters {
+  margin-top: 8px;
+  font-size: 0.8rem;
 }
-.bet-help code { font-family: var(--mono); font-size: 0.72rem; color: var(--text); }
+.bet-advanced-hint summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.78rem;
+}
+
+/* On Bet tab: hide situation mazes / edge stack unless Advanced open */
+.app.bet-mode .explorer-only { display: none; }
+.app.bet-mode.bet-advanced-open .explorer-only { display: block; }
+
+.bet-flow-legend {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg2);
+}
+.bet-flow-legend.compact .bet-flow-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 2px;
+  margin-bottom: 6px;
+}
+.flow-node {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: none;
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  font-size: 0.68rem;
+  font-weight: 650;
+  line-height: 1.3;
+  color: var(--text);
+  white-space: nowrap;
+}
+.flow-node .flow-sub { display: none; }
+.flow-node.slate { border-color: rgba(139,155,180,0.45); }
+.flow-node.trends { border-color: rgba(245,165,36,0.45); background: rgba(245,165,36,0.06); }
+.flow-node.chart { border-color: rgba(96,165,250,0.4); background: rgba(96,165,250,0.06); }
+.flow-node.newbot { border-color: rgba(167,139,250,0.4); background: rgba(167,139,250,0.06); }
+.flow-node.miles { border-color: rgba(62,207,142,0.4); background: rgba(62,207,142,0.06); }
+.flow-node.compress { border-color: rgba(139,155,180,0.55); }
+.flow-node em { font-style: italic; font-weight: 500; color: var(--muted); font-size: 0.62rem; }
+.flow-arrow {
+  color: var(--muted);
+  font-size: 0.8rem;
+  padding: 0 1px;
+  flex: 0 0 auto;
+}
+.bet-flow-kills.compact-kills {
+  font-size: 0.68rem;
+  color: var(--muted);
+  line-height: 1.35;
+  border-top: 1px dashed var(--border);
+  padding-top: 6px;
+}
+.bet-flow-kills.compact-kills code {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  color: var(--text);
+}
+
 .tint-swatch {
   display: inline-block;
-  padding: 1px 7px;
+  padding: 1px 6px;
   border-radius: 999px;
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   font-weight: 600;
-  margin: 0 2px;
+  margin: 0 1px;
 }
 .tint-swatch.green { background: rgba(62,207,142,0.18); color: var(--good); border: 1px solid rgba(62,207,142,0.45); }
 .tint-swatch.amber { background: rgba(245,165,36,0.15); color: var(--warn); border: 1px solid rgba(245,165,36,0.45); }
 .tint-swatch.gray { background: rgba(139,155,180,0.12); color: var(--muted); border: 1px solid var(--border); }
+.tint-swatch.red { background: rgba(255,92,122,0.12); color: var(--danger); border: 1px solid rgba(255,92,122,0.45); }
 
+.bet-layer-toggles-wrap {
+  margin: 0 0 10px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.bet-layer-toggles-wrap > summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
 .bet-layer-toggles {
-  display: flex; flex-wrap: wrap; gap: 12px 18px;
-  margin-bottom: 12px;
+  display: flex; flex-wrap: wrap; gap: 10px 16px;
+  margin-top: 6px;
   font-size: 0.85rem;
 }
 
 .singles-strip {
-  margin-bottom: 14px;
-  padding: 10px 12px;
-  border-radius: 12px;
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  border-radius: 10px;
   border: 1px solid rgba(62,207,142,0.35);
   background: rgba(62,207,142,0.06);
 }
 .singles-strip h3 {
-  margin: 0 0 8px;
-  font-size: 0.78rem;
+  margin: 0 0 6px;
+  font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--good);
@@ -446,31 +521,31 @@ footer {
   background: var(--bg2);
 }
 .singles-strip.empty-singles h3 { color: var(--muted); }
-.singles-list { display: flex; flex-direction: column; gap: 6px; }
+.singles-list { display: flex; flex-direction: column; gap: 4px; }
 .single-row {
-  display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px;
-  font-size: 0.85rem;
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px;
+  font-size: 0.82rem;
 }
 .single-row .match { font-weight: 600; }
-.single-row .lean { font-family: var(--mono); font-size: 0.78rem; }
-.single-row .why { color: var(--muted); font-size: 0.75rem; }
+.single-row .lean { font-family: var(--mono); font-size: 0.74rem; }
+.single-row .why { color: var(--muted); font-size: 0.72rem; }
 .single-pill {
-  font-size: 0.68rem; font-weight: 600; text-transform: uppercase;
-  padding: 2px 7px; border-radius: 999px; border: 1px solid var(--border);
+  font-size: 0.65rem; font-weight: 600; text-transform: uppercase;
+  padding: 2px 6px; border-radius: 999px; border: 1px solid var(--border);
 }
 .single-pill.green { color: var(--good); border-color: rgba(62,207,142,0.5); background: rgba(62,207,142,0.12); }
 .single-pill.amber { color: var(--warn); border-color: rgba(245,165,36,0.5); background: rgba(245,165,36,0.12); }
 
 .bet-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .bet-card {
   background: var(--bg2);
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 10px;
   padding: 0;
   overflow: hidden;
   display: flex;
@@ -486,11 +561,11 @@ footer {
 }
 .bet-card.overall-gray {
   border-color: var(--border);
-  opacity: 0.92;
+  opacity: 0.94;
 }
 
 .bet-card-head {
-  padding: 10px 12px;
+  padding: 8px 10px;
   display: flex; justify-content: space-between; gap: 8px; align-items: flex-start;
   border-bottom: 1px solid var(--border);
 }
@@ -498,12 +573,12 @@ footer {
 .bet-card.overall-amber .bet-card-head { background: rgba(245,165,36,0.08); }
 .bet-card.overall-gray .bet-card-head { background: rgba(139,155,180,0.06); }
 
-.bet-card-head .matchup { font-weight: 650; font-size: 0.98rem; }
+.bet-card-head .matchup { font-weight: 650; font-size: 0.92rem; }
 .bet-card-head .odds {
-  font-family: var(--mono); font-size: 0.72rem; color: var(--muted); margin-top: 3px; line-height: 1.4;
+  font-family: var(--mono); font-size: 0.7rem; color: var(--muted); margin-top: 2px; line-height: 1.35;
 }
 .bet-overall-badge {
-  font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
   padding: 4px 8px; border-radius: 8px; white-space: nowrap;
   border: 1px solid var(--border); color: var(--muted);
 }
@@ -511,146 +586,37 @@ footer {
 .bet-overall-badge.amber { color: var(--warn); border-color: rgba(245,165,36,0.5); background: rgba(245,165,36,0.12); }
 .bet-overall-badge.gray { color: var(--muted); }
 
-.bet-layers { padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 6px; }
-.bet-layer {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 8px 9px;
-  background: var(--panel);
-  font-size: 0.78rem;
-  line-height: 1.4;
-}
-.bet-layer.hidden-layer { display: none; }
-.bet-layer-head {
-  display: flex; justify-content: space-between; align-items: center; gap: 8px;
-  margin-bottom: 4px;
-}
-.bet-layer-name {
-  font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em;
-  color: var(--muted);
-}
-.bet-layer-chip {
-  font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
-  padding: 2px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted);
-}
-.bet-layer-chip.green { color: var(--good); border-color: rgba(62,207,142,0.5); background: rgba(62,207,142,0.12); }
-.bet-layer-chip.amber { color: var(--warn); border-color: rgba(245,165,36,0.5); background: rgba(245,165,36,0.12); }
-.bet-layer-chip.gray { color: var(--muted); }
-.bet-layer-chip.red { color: var(--danger); border-color: rgba(255,92,122,0.45); background: rgba(255,92,122,0.1); }
-
-.bet-layer .body { color: var(--text); }
-.bet-layer .muted { color: var(--muted); }
-.bet-layer .mono { font-family: var(--mono); font-size: 0.74rem; }
-.bet-layer .edge-chips { margin-top: 6px; }
-.bet-kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-family: var(--mono); font-size: 0.72rem; }
-.bet-kv span:first-child { color: var(--muted); }
-
-.tint-swatch.red { background: rgba(255,92,122,0.12); color: var(--danger); border: 1px solid rgba(255,92,122,0.45); }
-
-/* Decision-tree legend (Bet board) */
-.bet-flow-legend {
-  margin: 0 0 14px;
-  padding: 12px 12px 10px;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  background: var(--bg2);
-}
-.bet-flow-title {
-  font-size: 0.78rem;
-  font-weight: 650;
-  margin: 0 0 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text);
-}
-.bet-flow-title .muted { font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--muted); font-size: 0.72rem; }
-.bet-flow-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: stretch;
-  gap: 6px 4px;
-  margin-bottom: 10px;
-}
-.flow-node {
-  flex: 1 1 110px;
-  min-width: 100px;
-  max-width: 180px;
-  padding: 8px 9px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: var(--panel);
-  font-size: 0.72rem;
-  font-weight: 650;
-  line-height: 1.35;
-  color: var(--text);
-}
-.flow-node .flow-sub {
-  display: block;
-  margin-top: 3px;
-  font-weight: 500;
-  font-size: 0.66rem;
-  color: var(--muted);
-  line-height: 1.35;
-}
-.flow-node.slate { border-color: rgba(139,155,180,0.45); }
-.flow-node.trends { border-color: rgba(245,165,36,0.45); background: rgba(245,165,36,0.06); }
-.flow-node.chart { border-color: rgba(96,165,250,0.4); background: rgba(96,165,250,0.06); }
-.flow-node.newbot { border-color: rgba(167,139,250,0.4); background: rgba(167,139,250,0.06); }
-.flow-node.miles { border-color: rgba(62,207,142,0.4); background: rgba(62,207,142,0.06); }
-.flow-node.compress { border-color: rgba(139,155,180,0.55); max-width: 220px; }
-.flow-arrow {
-  align-self: center;
-  color: var(--muted);
-  font-size: 0.9rem;
-  padding: 0 2px;
-  flex: 0 0 auto;
-}
-.bet-flow-kills {
-  font-size: 0.74rem;
-  color: var(--muted);
-  line-height: 1.4;
-  border-top: 1px dashed var(--border);
-  padding-top: 8px;
-}
-.bet-flow-kills strong { color: var(--text); font-size: 0.72rem; }
-.bet-flow-kills ul {
-  margin: 6px 0 0;
-  padding-left: 18px;
-}
-.bet-flow-kills li { margin: 2px 0; }
-.bet-flow-kills code { font-family: var(--mono); font-size: 0.68rem; color: var(--text); }
-
-/* Per-card decision step strip */
+/* Mini desk tree */
 .bet-decision-strip {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 3px;
-  padding: 8px 10px 0;
-  font-size: 0.68rem;
+  gap: 3px 2px;
+  padding: 6px 10px 0;
+  font-size: 0.66rem;
 }
 .bet-step {
   display: inline-flex;
   flex-direction: column;
-  gap: 1px;
-  padding: 4px 7px;
-  border-radius: 8px;
+  gap: 0;
+  padding: 3px 6px;
+  border-radius: 7px;
   border: 1px solid var(--border);
   background: var(--panel);
   min-width: 0;
-  max-width: 140px;
-  line-height: 1.25;
+  max-width: 120px;
+  line-height: 1.2;
 }
 .bet-step .step-k {
-  font-size: 0.58rem;
+  font-size: 0.55rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   color: var(--muted);
 }
 .bet-step .step-v {
   font-family: var(--mono);
-  font-size: 0.68rem;
+  font-size: 0.66rem;
   font-weight: 600;
   color: var(--text);
   white-space: nowrap;
@@ -665,37 +631,136 @@ footer {
 .bet-step.gray .step-v { color: var(--muted); }
 .bet-step.red { border-color: rgba(255,92,122,0.5); background: rgba(255,92,122,0.1); }
 .bet-step.red .step-v { color: var(--danger); }
-.bet-step.overall {
-  margin-left: 2px;
-  font-weight: 700;
-}
-.bet-step-arrow {
+.bet-step.overall { margin-left: 2px; font-weight: 700; }
+.bet-step-arrow { color: var(--muted); font-size: 0.7rem; flex: 0 0 auto; }
+
+/* ONE kill / caution / why line on face */
+.bet-kill-note,
+.bet-caution-note,
+.bet-why-line {
+  margin: 4px 10px 0;
+  padding: 4px 8px;
+  border-radius: 7px;
+  font-size: 0.7rem;
   color: var(--muted);
-  font-size: 0.75rem;
-  flex: 0 0 auto;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
+.bet-kill-note.flat,
+.bet-caution-note.flat,
+.bet-why-line.flat { /* single line, no essay */ }
 .bet-kill-note {
-  margin: 6px 10px 0;
-  padding: 5px 8px;
-  border-radius: 8px;
   border: 1px dashed rgba(255,92,122,0.4);
   background: rgba(255,92,122,0.06);
-  font-size: 0.7rem;
-  color: var(--muted);
-  line-height: 1.35;
 }
-.bet-kill-note strong { color: var(--danger); font-weight: 650; }
 .bet-caution-note {
-  margin: 6px 10px 0;
-  padding: 5px 8px;
-  border-radius: 8px;
   border: 1px dashed rgba(245,165,36,0.4);
   background: rgba(245,165,36,0.06);
-  font-size: 0.7rem;
+}
+.bet-why-line {
+  border: 1px solid var(--border);
+  background: var(--panel);
+}
+
+/* Secondary layer chips (not a prose wall) */
+.bet-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 10px 0;
+}
+.bet-layer-chip {
+  font-size: 0.62rem; font-weight: 700; text-transform: uppercase;
+  padding: 2px 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted);
+}
+.bet-layer-chip.green { color: var(--good); border-color: rgba(62,207,142,0.5); background: rgba(62,207,142,0.12); }
+.bet-layer-chip.amber { color: var(--warn); border-color: rgba(245,165,36,0.5); background: rgba(245,165,36,0.12); }
+.bet-layer-chip.gray { color: var(--muted); }
+.bet-layer-chip.red { color: var(--danger); border-color: rgba(255,92,122,0.45); background: rgba(255,92,122,0.1); }
+
+.bet-advanced-layers {
+  margin: 4px 10px 8px;
+  font-size: 0.72rem;
   color: var(--muted);
+}
+.bet-advanced-layers > summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.bet-layers { padding: 6px 0 0; display: flex; flex-direction: column; gap: 6px; }
+.bet-layer {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 8px;
+  background: var(--panel);
+  font-size: 0.76rem;
   line-height: 1.35;
 }
-.bet-caution-note strong { color: var(--warn); font-weight: 650; }
+.bet-layer-head {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  margin-bottom: 4px;
+}
+.bet-layer-name {
+  font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em;
+  color: var(--muted);
+}
+.bet-layer .body { color: var(--text); }
+.bet-layer .muted { color: var(--muted); }
+.bet-layer .mono { font-family: var(--mono); font-size: 0.72rem; }
+.bet-layer .edge-chips { margin-top: 6px; }
+.bet-kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-family: var(--mono); font-size: 0.7rem; }
+.bet-kv span:first-child { color: var(--muted); }
 
-.flow-node em { font-style: italic; font-weight: 500; color: var(--muted); font-size: 0.64rem; }
+/* Miles: face = status chip (in layer head) + kill line; true/likely behind tap */
+.miles-kill-face {
+  font-size: 0.72rem;
+  color: var(--danger);
+  font-family: var(--mono);
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.miles-memo {
+  margin-top: 2px;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+.miles-memo > summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
 
+/* Legacy help block unused on default (kept if reintroduced) */
+.bet-help { display: none; }
+
+/* Chart: face = green/amber/red chip only; Win%/RD/G/quadrant/note behind tap */
+.chart-caution-face {
+  font-size: 0.72rem;
+  color: var(--danger);
+  font-family: var(--mono);
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chart-memo {
+  margin-top: 2px;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+.chart-memo > summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}

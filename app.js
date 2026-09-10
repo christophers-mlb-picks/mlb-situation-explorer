@@ -1658,12 +1658,14 @@
   }
 
   function renderChartLayer(g) {
+    // Thin Bet face: one green/amber/red chip only. Win%/RD/G / quadrant / note behind tap (Miles pattern).
     const c = chartOf(g);
     if (c.awaiting) {
-      return layerHtml("Chart", "amber", "awaiting", '<div class="muted">Chart: awaiting feed</div>');
+      return layerHtml("Chart", "amber", "awaiting",
+        '<div class="muted">awaiting feed</div><details class="chart-memo"><summary>Win% / RD/G / quadrant</summary><div class="muted">Chart: awaiting feed</div></details>');
     }
     const scr = c.screen || "red";
-    const chip = scr === "green" ? "green" : scr === "amber" ? "amber" : "gray";
+    const chip = scr === "green" ? "green" : scr === "amber" ? "amber" : scr === "red" ? "red" : "gray";
     const away = c.away || {};
     const home = c.home || {};
     const aw = typeof away === "object" ? away : {};
@@ -1672,8 +1674,14 @@
     if (aw.abbr) lines.push(`${aw.abbr} Win% ${aw.win_pct != null ? (aw.win_pct * 100).toFixed(1) : "—"} · RD/G ${aw.rd_per_game != null ? Number(aw.rd_per_game).toFixed(2) : "—"} · ${aw.quadrant || "—"}`);
     if (ho.abbr) lines.push(`${ho.abbr} Win% ${ho.win_pct != null ? (ho.win_pct * 100).toFixed(1) : "—"} · RD/G ${ho.rd_per_game != null ? Number(ho.rd_per_game).toFixed(2) : "—"} · ${ho.quadrant || "—"}`);
     if (!lines.length && c.quadrant) lines.push(`quadrant ${c.quadrant} · RD/G ${c.rd_per_game != null ? Number(c.rd_per_game).toFixed(2) : "—"} · Win% ${c.win_pct != null ? (c.win_pct * 100).toFixed(1) : "—"}`);
-    const note = c.note ? `<div class="muted" style="margin-top:4px">${escapeHtml(c.note)}</div>` : "";
-    return layerHtml("Chart", chip, scr, `<div class="mono">${lines.map(escapeHtml).join("<br>")}</div>${note}`);
+    // Face: chip only (+ red caution already on card kill line). Detail behind tap.
+    const face = scr === "red"
+      ? '<div class="chart-caution-face">red · caution, not auto-kill</div>'
+      : "";
+    const detailBody = (lines.length ? `<div class="mono">${lines.map(escapeHtml).join("<br>")}</div>` : '<div class="muted">—</div>')
+      + (c.note ? `<div class="muted" style="margin-top:4px">${escapeHtml(c.note)}</div>` : "");
+    const memo = `<details class="chart-memo"><summary>Win% / RD/G / quadrant</summary>${detailBody}</details>`;
+    return layerHtml("Chart", chip, scr, face + memo);
   }
 
   function renderNewbotLayer(g) {
@@ -1699,16 +1707,21 @@
   }
 
   function renderMilesLayer(g, miles) {
+    // Face rule (thin Bet): status chip + kill only; true/likely behind expand (this layer lives in collapsed detail).
     const chip = milesChipTint(miles);
-    const kv = [
-      ["status", miles.status],
-      ["market", miles.market || "none"],
-      ["side", miles.side == null ? "—": miles.side],
-      ["true", miles.true || "—"],
-      ["likely", miles.likely || "—"],
-      ["kill", miles.kill || "—"],
-    ];
-    return layerHtml("Miles", chip, miles.status, `<div class="bet-kv">${kv.map(([k,v]) => `<span>${k}</span><span>${escapeHtml(String(v))}</span>`).join("")}</div>`);
+    const killTxt = (miles.kill || "").trim();
+    const face = killTxt
+      ? `<div class="miles-kill-face">kill · ${escapeHtml(killTxt)}</div>`
+      : `<div class="muted">status · ${escapeHtml(miles.status || "stand_down")}</div>`;
+    const memo = `<details class="miles-memo"><summary>true / likely</summary>
+      <div class="bet-kv">
+        <span>true</span><span>${escapeHtml(miles.true || "—")}</span>
+        <span>likely</span><span>${escapeHtml(miles.likely || "—")}</span>
+        <span>market</span><span>${escapeHtml(miles.market || "none")}</span>
+        <span>side</span><span>${escapeHtml(miles.side == null ? "—" : String(miles.side))}</span>
+      </div>
+    </details>`;
+    return layerHtml("Miles", chip, miles.status, face + memo);
   }
 
   function layerHtml(name, chip, chipLabel, body) {
@@ -1778,6 +1791,30 @@
     return { trendsStep, chartStep, nbStep, milesStep, overallStep, why: r.overall.why || "", branch: r.overall.branch || "" };
   }
 
+  function killCautionLine(r) {
+    const s = decisionSteps(r);
+    // One visible line: prefer Miles kill, then conflict, then stand_down, then NB kill, then chart caution, else overall why
+    if (s.milesStep.killText) {
+      return { cls: "bet-kill-note", text: `Miles kill · ${s.milesStep.killText}` };
+    }
+    if (s.branch === "side_conflict") {
+      return { cls: "bet-kill-note", text: s.why || "Trends↔Miles conflict" };
+    }
+    if (s.branch === "miles_stand_down") {
+      return { cls: "bet-caution-note", text: "Miles stand_down · PASS (no path around Miles to green)" };
+    }
+    if (s.nbStep.killText) {
+      return { cls: "bet-kill-note", text: `New Bot kill · ${s.nbStep.killText}` };
+    }
+    if (s.chartStep.caution) {
+      return { cls: "bet-caution-note", text: "Chart red · caution, not auto-kill" };
+    }
+    if (r.overall && r.overall.why) {
+      return { cls: "bet-why-line", text: r.overall.why };
+    }
+    return null;
+  }
+
   function renderDecisionStrip(r) {
     const s = decisionSteps(r);
     const steps = [s.trendsStep, s.chartStep, s.nbStep, s.milesStep, s.overallStep];
@@ -1786,21 +1823,64 @@
       const cls = `bet-step ${st.tint}${st.overall ? " overall" : ""}`;
       return `${arrow}<div class="${cls}" title="${escapeHtml(st.key + ": " + st.value)}"><span class="step-k">${escapeHtml(st.key)}</span><span class="step-v">${escapeHtml(st.value)}</span></div>`;
     }).join("");
-    let notes = "";
-    if (s.milesStep.killText) {
-      notes += `<div class="bet-kill-note"><strong>Miles kill</strong> · ${escapeHtml(s.milesStep.killText)}</div>`;
-    } else if (s.branch === "miles_stand_down") {
-      notes += `<div class="bet-caution-note"><strong>Miles stand_down</strong> · tree ends PASS (gray) — no path around Miles to green</div>`;
-    } else if (s.branch === "side_conflict") {
-      notes += `<div class="bet-kill-note"><strong>Trends↔Miles conflict</strong> · ${escapeHtml(s.why)}</div>`;
+    const line = killCautionLine(r);
+    const note = line
+      ? `<div class="${line.cls} flat">${escapeHtml(line.text)}</div>`
+      : "";
+    return `<div class="bet-decision-strip" aria-label="Decision path">${nodes}</div>${note}`;
+  }
+
+  function dkLineHtml(g) {
+    const ml = `ML ${g.away_abbr} ${g.dk_ml_away || "—"} / ${g.home_abbr} ${g.dk_ml_home || "—"}`;
+    const rlAway = g.dk_rl_away || g.rl_away || g.away_rl;
+    const rlHome = g.dk_rl_home || g.rl_home || g.home_rl;
+    const rl = (rlAway || rlHome)
+      ? `RL ${g.away_abbr} ${rlAway || "—"} / ${g.home_abbr} ${rlHome || "—"}`
+      : "RL —";
+    const tot = `O/U ${g.total != null ? g.total : "—"}`;
+    return `DK ${ml} · ${rl} · ${tot}`;
+  }
+
+  function renderLayerChipsRow(r, showT, showC, showN, showM) {
+    const chips = [];
+    if (showT) {
+      const lean = r.trends.lean;
+      const tint = lean ? "amber" : "gray";
+      const lab = lean ? `${lean.market} ${normAbbr(lean.side)}` : "pass";
+      chips.push(`<span class="bet-layer-chip ${tint}" title="Trends">T · ${escapeHtml(lab)}</span>`);
     }
-    if (s.nbStep.killText) {
-      notes += `<div class="bet-kill-note"><strong>New Bot kill criteria</strong> · ${escapeHtml(s.nbStep.killText)}</div>`;
+    if (showC) {
+      const c = r.chart;
+      let tint = "gray", lab = "awaiting";
+      if (c && !c.awaiting && c.screen) {
+        lab = c.screen;
+        tint = c.screen === "green" ? "green" : c.screen === "amber" ? "amber" : c.screen === "red" ? "red" : "gray";
+      }
+      chips.push(`<span class="bet-layer-chip ${tint}" title="Chart">C · ${escapeHtml(lab)}</span>`);
     }
-    if (s.chartStep.caution) {
-      notes += `<div class="bet-caution-note"><strong>Chart red</strong> · caution, not auto-kill</div>`;
+    if (showN) {
+      const n = r.newbot;
+      const present = n && n.present;
+      const st = present ? (n.status || "pass") : "none";
+      const tint = st === "watch" ? "amber" : "gray";
+      chips.push(`<span class="bet-layer-chip ${tint}" title="New Bot">NB · ${escapeHtml(st)}</span>`);
     }
-    return `<div class="bet-decision-strip" aria-label="Decision path">${nodes}</div>${notes}`;
+    if (showM) {
+      const miles = r.miles;
+      const tint = milesChipTint(miles);
+      chips.push(`<span class="bet-layer-chip ${tint}" title="Miles">M · ${escapeHtml(miles.status || "stand_down")}</span>`);
+    }
+    return `<div class="bet-chip-row">${chips.join("")}</div>`;
+  }
+
+  function renderCollapsedLayers(g, r, showT, showC, showN, showM) {
+    const layers = [];
+    if (showT) layers.push(renderTrendsLayer(g, r.trends));
+    if (showC) layers.push(renderChartLayer(g));
+    if (showN) layers.push(renderNewbotLayer(g));
+    if (showM) layers.push(renderMilesLayer(g, r.miles));
+    if (!layers.length) return "";
+    return `<details class="bet-advanced-layers"><summary>Layer detail</summary><div class="bet-layers">${layers.join("")}</div></details>`;
   }
 
     function enrichBetGame(g) {
@@ -1829,16 +1909,16 @@
     if (singles) {
       if (!consider.length) {
         singles.className = "singles-strip empty-singles";
-        singles.innerHTML = "<h3>Singles to consider</h3><div class=\"muted\">None yet — need Miles watch + Trends lean (WATCH) or Miles clear + Trends agree (GREEN). stand_down/kill end PASS.</div>";
+        singles.innerHTML = "<h3>Singles</h3><div class=\"muted\">no green today</div>";
       } else {
         singles.className = "singles-strip";
-        singles.innerHTML = `<h3>Singles to consider</h3><div class="singles-list">${consider.map((r) => {
+        singles.innerHTML = `<h3>Singles</h3><div class="singles-list">${consider.map((r) => {
           const L = r.trends.lean;
           return `<div class="single-row">
             <span class="single-pill ${r.overall.tint}">${r.overall.label}</span>
             <span class="match">${escapeHtml(r.g.name)}</span>
             <span class="lean">${L ? `${L.market} ${normAbbr(L.side)}` : "—"}</span>
-            <span class="why">${escapeHtml(r.overall.why)}${L ? " · " + escapeHtml(L.reason) : ""}</span>
+            <span class="why">${escapeHtml(r.overall.why)}</span>
           </div>`;
         }).join("")}</div>`;
       }
@@ -1851,24 +1931,18 @@
 
     host.innerHTML = rows.map((r) => {
       const g = r.g;
-      const layers = [];
-      if (showT) layers.push(renderTrendsLayer(g, r.trends));
-      if (showC) layers.push(renderChartLayer(g));
-      if (showN) layers.push(renderNewbotLayer(g));
-      if (showM) layers.push(renderMilesLayer(g, r.miles));
       const overallLabel = r.overall.tint === "green" ? "green" : r.overall.tint === "amber" ? "watch" : "pass";
       return `<article class="bet-card overall-${r.overall.tint}">
         <div class="bet-card-head">
           <div>
             <div class="matchup">${escapeHtml(g.name)}</div>
-            <div class="odds">DK ${g.away_abbr} ${g.dk_ml_away || "—"} / ${g.home_abbr} ${g.dk_ml_home || "—"}
-              · ESPN ${g.espn_away_wp != null ? Number(g.espn_away_wp).toFixed(1) + "%" : "—"} / ${g.espn_home_wp != null ? Number(g.espn_home_wp).toFixed(1) + "%" : "—"}
-              · O/U ${g.total != null ? g.total : "—"}</div>
+            <div class="odds">${escapeHtml(dkLineHtml(g))}</div>
           </div>
           <span class="bet-overall-badge ${r.overall.tint}">${overallLabel}</span>
         </div>
         ${renderDecisionStrip(r)}
-        <div class="bet-layers">${layers.join("")}</div>
+        ${renderLayerChipsRow(r, showT, showC, showN, showM)}
+        ${renderCollapsedLayers(g, r, showT, showC, showN, showM)}
       </article>`;
     }).join("");
   }
@@ -1878,10 +1952,14 @@
     const el = $("#today-grid");
     const slate = state.data.slate;
     if (!slate?.games?.length) {
-      panel.classList.add("hidden");
+      if (panel) panel.classList.add("hidden");
       return;
     }
-    panel.classList.remove("hidden");
+    // Duplicate #today-panel only when Today tab is active (Bet board stays clean)
+    if (panel) {
+      if (state.tab === "today") panel.classList.remove("hidden");
+      else panel.classList.add("hidden");
+    }
     $("#today-date").textContent = slate.date || "latest";
 
     const games = filteredSlateGames();
@@ -1981,20 +2059,25 @@
     const tab = state.tab;
     $$(".tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
     $$(".view-panel").forEach((p) => p.classList.toggle("hidden", p.dataset.view !== tab));
+    const app = document.querySelector(".app");
+    if (app) {
+      app.classList.toggle("bet-mode", tab === "bet");
+      if (tab !== "bet") app.classList.remove("bet-advanced-open");
+    }
+    const hint = document.getElementById("bet-advanced-hint");
+    if (hint) hint.hidden = tab !== "bet";
     if (tab === "heat") renderHeat();
     if (tab === "scatter") renderScatter();
     if (tab === "list") renderList();
     if (tab === "edge") renderEdgeBoard();
     if (tab === "today") renderToday();
-    if (tab === "bet") renderBetBoard();
-    // always keep today finder panel in sync
-    renderToday();
-    // keep bet board warm when on other tabs so singles stay current if revisited
-    if (tab !== "bet") {
-      try { renderBetBoard(); } catch (_) {}
+    else {
+      const panel = document.getElementById("today-panel");
+      if (panel) panel.classList.add("hidden");
     }
-    if (tab !== "edge") {
-      // keep edge board warm when stacked? only when tab edge — already handled
+    if (tab === "bet") renderBetBoard();
+    else {
+      try { renderBetBoard(); } catch (_) {}
     }
     saveState();
   }
@@ -2266,6 +2349,14 @@
     betToggle("bet-layer-chart", "betLayerChart");
     betToggle("bet-layer-newbot", "betLayerNewbot");
     betToggle("bet-layer-miles", "betLayerMiles");
+    const adv = document.getElementById("advanced-filters");
+    if (adv) {
+      adv.addEventListener("toggle", () => {
+        const app = document.querySelector(".app");
+        if (!app) return;
+        app.classList.toggle("bet-advanced-open", adv.open);
+      });
+    }
 
       $("#detail-bar").classList.remove("visible");
       renderList();
