@@ -400,6 +400,49 @@ footer {
 /* ===== V3 Bet board ===== */
 /* Thin “Bloomberg for DK” default — desk tree + badge + kill line */
 
+
+/* ----- How to use (pinned Bet board guide) ----- */
+.bet-howto {
+  margin: 0 0 10px;
+  padding: 6px 10px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg2);
+  font-size: 0.78rem;
+  color: var(--text);
+}
+.bet-howto > summary {
+  cursor: pointer;
+  font-weight: 650;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  list-style: none;
+}
+.bet-howto > summary::-webkit-details-marker { display: none; }
+.bet-howto > summary::before {
+  content: "▸ ";
+  color: var(--accent, var(--warn));
+  font-size: 0.7rem;
+}
+.bet-howto[open] > summary::before { content: "▾ "; }
+.bet-howto-list {
+  margin: 6px 0 0;
+  padding-left: 1.15rem;
+  line-height: 1.4;
+  color: var(--text);
+}
+.bet-howto-list li { margin: 0 0 4px; }
+.bet-howto-chart {
+  margin: 6px 0 0;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border);
+  font-size: 0.7rem;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
 .bet-advanced-hint[hidden] { display: none !important; }
 .bet-advanced-hint .advanced-filters {
   margin-top: 8px;

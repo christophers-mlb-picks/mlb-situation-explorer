@@ -2904,6 +2904,20 @@
     bindControls();
     applyInitialControlValues();
 
+    // How-to: expanded once (first visit), then starts collapsed
+    const howto = $("#bet-howto");
+    if (howto) {
+      try {
+        if (localStorage.getItem("mlb-bet-howto-seen") === "1") howto.open = false;
+      } catch (_) {}
+      howto.addEventListener("toggle", () => {
+        if (!howto.open) {
+          try { localStorage.setItem("mlb-bet-howto-seen", "1"); } catch (_) {}
+        }
+      });
+    }
+
+
     const slateNote = state.data.slate?.date
       ? `Slate: ${state.data.slate.date} (${state.data.slate.games.length} games)`
       : "No slate files found";
