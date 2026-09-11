@@ -2710,6 +2710,9 @@
     });
     $("#unpin").addEventListener("click", () => {
       state.pinned = null;
+      $("#detail-bar").classList.remove("visible");
+      renderList();
+    });
 
     const betToggle = (id, key) => {
       const el = document.getElementById(id);
@@ -2783,11 +2786,10 @@
         if (!app) return;
         app.classList.toggle("bet-advanced-open", adv.open);
       });
+      // Keep class in sync if details was restored open
+      const app0 = document.querySelector(".app");
+      if (app0) app0.classList.toggle("bet-advanced-open", adv.open);
     }
-
-      $("#detail-bar").classList.remove("visible");
-      renderList();
-    });
   }
 
   function applyInitialControlValues() {
