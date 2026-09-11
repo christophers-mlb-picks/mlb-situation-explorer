@@ -191,6 +191,7 @@
           <button type="button" data-tab="today">Today finder</button>
           <button type="button" data-tab="heat">Heat map</button>
           <button type="button" data-tab="scatter">Scatter</button>
+          <button type="button" data-tab="drift">League Drift</button>
           <button type="button" data-tab="list">Filtered list</button>
         </div>
         <div class="stats-pill">
@@ -245,6 +246,17 @@
         <div id="scatter-chart" class="chart"></div>
       </section>
 
+
+      <section class="panel view-panel hidden" data-view="drift">
+        <div class="panel-title">
+          <h2>League Drift</h2>
+          <span class="hint">Climate view · living standings scrubber · not a Bet ticket</span>
+        </div>
+        <p class="sub" style="margin:0 0 10px;font-size:12px;color:var(--muted);line-height:1.4">
+          League climate only — verified daily closes with Play trails + date range. Off the Bet ticket tree; Chart refreshes the feed later.
+        </p>
+        <iframe class="drift-frame" src="league_drift.html" title="League Drift scrubber" loading="lazy"></iframe>
+      </section>
 
       <section class="panel view-panel hidden" data-view="edge">
         <div class="panel-title">
