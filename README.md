@@ -16,3 +16,8 @@ Static snapshot. Baseline years are a From/To picker (default 2021–2026). Filt
 6. Ignore Edge stack / maps / TR stars / hotness on this screen — fog, not the tell.
 
 Chart line: chip green/amber/red = season Win%/RD screen only (LR under Climate). Tap for Win%/RD — not a ticket by itself.
+- **Miles:** chip = clear / watch / kill / stand_down. Green on Miles only if clear. Kill or stand_down = gray end — tap for true / likely / kill text.
+- **Kane:** after green clears New Bot + Miles, Kane sets units (fades smaller). Paper until CLV clears. No size from Bluff checkboxes alone.
+
+
+
