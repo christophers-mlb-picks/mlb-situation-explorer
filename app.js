@@ -1461,6 +1461,41 @@
     return null;
   }
 
+
+  /** Face label for Chart chip: UL/LR + team — never bare "green" (reads like a buy). */
+  function chartFaceLabel(g, chart) {
+    const c = chart || chartOf(g) || {};
+    if (c.awaiting || !c.screen) return c.awaiting ? "awaiting" : "—";
+    const aw = (c.away && typeof c.away === "object") ? c.away : null;
+    const ho = (c.home && typeof c.home === "object") ? c.home : null;
+    const sides = [];
+    for (const s of [aw, ho]) {
+      if (!s) continue;
+      const q = s.quadrant || "";
+      const abbr = normAbbr(s.abbr || "");
+      if (!abbr) continue;
+      if (q === "UL" || q === "LR") sides.push({ q, abbr });
+    }
+    // Prefer UL over LR when both (climate screen priority)
+    const ul = sides.filter((x) => x.q === "UL");
+    const lr = sides.filter((x) => x.q === "LR");
+    if (ul.length === 1) return `UL ${ul[0].abbr}`;
+    if (ul.length > 1) return `UL ${ul.map((x) => x.abbr).join("/")}`;
+    if (lr.length === 1) return `LR ${lr[0].abbr}`;
+    if (lr.length > 1) return `LR ${lr.map((x) => x.abbr).join("/")}`;
+    // Fallback: top-level quadrant if present
+    if (c.quadrant === "UL" || c.quadrant === "LR") {
+      const ab = normAbbr(c.abbr || "") || "";
+      return ab ? `${c.quadrant} ${ab}` : c.quadrant;
+    }
+    // Non UL/LR screens: keep color word but tag as screen so it isn't a buy
+    const scr = c.screen || "red";
+    if (scr === "green") return "screen";
+    if (scr === "amber") return "amber";
+    if (scr === "red") return "red";
+    return String(scr);
+  }
+
   /** New Bot lean side from mark.side when present. */
   function newbotLeanSide(nb) {
     if (!nb || !nb.present) return null;
@@ -1740,7 +1775,7 @@
   }
 
   function renderChartLayer(g) {
-    // Thin Bet face: one green/amber/red chip only. Win%/RD/G / quadrant / note behind tap (Miles pattern).
+    // Thin Bet face: tint stays green/amber/red; label is UL/LR + team (never bare "green" buy).
     const c = chartOf(g);
     if (c.awaiting) {
       return layerHtml("Chart", "amber", "awaiting",
@@ -1763,7 +1798,8 @@
     const detailBody = (lines.length ? `<div class="mono">${lines.map(escapeHtml).join("<br>")}</div>` : '<div class="muted">—</div>')
       + (c.note ? `<div class="muted" style="margin-top:4px">${escapeHtml(c.note)}</div>` : "");
     const memo = `<details class="chart-memo"><summary>Win% / RD/G / quadrant</summary>${detailBody}</details>`;
-    return layerHtml("Chart", chip, scr, face + memo);
+    const faceLab = chartFaceLabel(g, c);
+    return layerHtml("Chart", chip, faceLab, face + memo);
   }
 
   function renderNewbotLayer(g) {
@@ -1836,10 +1872,10 @@
     let chartTint = "gray";
     let chartVal = "awaiting";
     if (chart && !chart.awaiting && chart.screen) {
-      chartVal = chart.screen;
+      chartVal = chartFaceLabel(r.g || null, chart);
       chartTint = chart.screen === "green" ? "green" : chart.screen === "amber" ? "amber" : chart.screen === "red" ? "red" : "gray";
     }
-    const chartStep = { key: "Chart", value: chartVal, tint: chartTint, fired: !!(chart && !chart.awaiting && chart.screen), caution: chartVal === "red" };
+    const chartStep = { key: "Chart", value: chartVal, tint: chartTint, fired: !!(chart && !chart.awaiting && chart.screen), caution: chart.screen === "red" };
     let nbTint = "gray";
     let nbVal = "none";
     if (nb && nb.present) {
@@ -1942,10 +1978,10 @@
       const c = r.chart;
       let tint = "gray", lab = "awaiting";
       if (c && !c.awaiting && c.screen) {
-        lab = c.screen;
+        lab = chartFaceLabel(r.g, c);
         tint = c.screen === "green" ? "green" : c.screen === "amber" ? "amber" : c.screen === "red" ? "red" : "gray";
       }
-      chips.push(`<span class="bet-layer-chip ${tint}" title="Chart">C · ${escapeHtml(lab)}</span>`);
+      chips.push(`<span class="bet-layer-chip ${tint}" title="Chart climate — not a buy">C · ${escapeHtml(lab)}</span>`);
     }
     if (showN) {
       const n = r.newbot;
