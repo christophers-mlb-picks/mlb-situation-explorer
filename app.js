@@ -1441,6 +1441,49 @@
     return String(a).toUpperCase() === String(b).toUpperCase();
   }
 
+  /** Chart UL climate side from away/home objects with quadrant === "UL". */
+  function chartUlSide(chart, g) {
+    const c = chart || {};
+    if (c.awaiting) return null;
+    const aw = (c.away && typeof c.away === "object") ? c.away : null;
+    const ho = (c.home && typeof c.home === "object") ? c.home : null;
+    const hits = [];
+    if (aw && aw.quadrant === "UL") hits.push(normAbbr(aw.abbr || g?.away_abbr));
+    if (ho && ho.quadrant === "UL") hits.push(normAbbr(ho.abbr || g?.home_abbr));
+    const uniq = [...new Set(hits.filter(Boolean))];
+    if (uniq.length === 1) return uniq[0];
+    if (uniq.length > 1) {
+      // Prefer side matching top-level climate note / quadrant team
+      const topAbbr = normAbbr(c.abbr || "");
+      if (topAbbr && uniq.includes(topAbbr)) return topAbbr;
+      return uniq[0];
+    }
+    return null;
+  }
+
+  /** New Bot lean side from mark.side when present. */
+  function newbotLeanSide(nb) {
+    if (!nb || !nb.present) return null;
+    const s = nb.side;
+    if (s == null || s === "" || s === "—") return null;
+    return normAbbr(s);
+  }
+
+  /** Chart UL points one side, New Bot lean the other → conflict / no-side (Kane: 0u). */
+  function chartNbConflict(g, chart, newbot) {
+    const ul = chartUlSide(chart, g);
+    const lean = newbotLeanSide(newbot);
+    if (!ul || !lean) return null;
+    if (sidesMatch(ul, lean)) return null;
+    return {
+      conflict: true,
+      chartUl: ul,
+      newbotLean: lean,
+      why: "Chart UL ≠ New Bot lean — no-side",
+      branch: "chart_nb_conflict",
+    };
+  }
+
   /** Trends disagreement lean — flags assist OR compute TR% vs DK implied (≥~8pp ML; ATS dog / home-fav-won't-cover). O/U off. */
   function computeTrendsLean(g) {
     const leans = [];
@@ -1820,9 +1863,13 @@
       killText: mSt === "kill" ? ((miles.kill || "").trim()) : "",
     };
     const overallMap = { green: "GREEN", amber: "WATCH", gray: "PASS" };
+    let overallVal = overallMap[r.overall.tint] || String(r.overall.label || "").toUpperCase();
+    if (r.overall.branch === "chart_nb_conflict" || r.overall.label === "no-side" || r.conflict) {
+      overallVal = "NO-SIDE";
+    }
     const overallStep = {
       key: "Overall",
-      value: overallMap[r.overall.tint] || String(r.overall.label || "").toUpperCase(),
+      value: overallVal,
       tint: r.overall.tint,
       fired: true,
       overall: true,
@@ -1835,6 +1882,9 @@
     // One visible line: prefer Miles kill, then conflict, then stand_down, then NB kill, then chart caution, else overall why
     if (s.milesStep.killText) {
       return { cls: "bet-kill-note", text: `Miles kill · ${s.milesStep.killText}` };
+    }
+    if (s.branch === "chart_nb_conflict" || (r.overall && r.overall.branch === "chart_nb_conflict") || r.conflict) {
+      return { cls: "bet-kill-note", text: (r.overall && r.overall.why) || s.why || "Chart UL ≠ New Bot lean — no-side" };
     }
     if (s.branch === "side_conflict") {
       return { cls: "bet-kill-note", text: s.why || "Trends↔Miles conflict" };
@@ -1908,6 +1958,12 @@
       const miles = r.miles;
       const tint = milesChipTint(miles);
       chips.push(`<span class="bet-layer-chip ${tint}" title="Miles">M · ${escapeHtml(miles.status || "stand_down")}</span>`);
+    }
+    if (r.conflict || (r.overall && r.overall.branch === "chart_nb_conflict")) {
+      const ul = r.conflict?.chartUl || "";
+      const nb = r.conflict?.newbotLean || "";
+      const tip = ul && nb ? `Chart UL ${ul} ≠ New Bot ${nb}` : "Chart UL ≠ New Bot lean — no-side";
+      chips.push(`<span class="bet-layer-chip gray bet-face-chip-conflict" title="${escapeHtml(tip)}">conflict / no-side</span>`);
     }
     return `<div class="bet-chip-row">${chips.join("")}</div>`;
   }
@@ -2155,6 +2211,9 @@
   /** Desk tint for candidate row: Miles kill/stand_down → gray; overall from tree. */
   function bluffDeskTint(enriched) {
     if (!enriched) return { tint: "gray", label: "pass" };
+    if (enriched.conflict || enriched.overall?.branch === "chart_nb_conflict") {
+      return { tint: "gray", label: "no-side · Chart≠NB" };
+    }
     const miles = enriched.miles || {};
     const st = miles.status || "stand_down";
     if (st === "kill" || st === "stand_down") {
@@ -2166,6 +2225,8 @@
   }
 
   function newbotClearsForSize(enriched) {
+    // Kane: Chart UL ≠ New Bot conflict → 0 units
+    if (enriched?.conflict || enriched?.overall?.branch === "chart_nb_conflict") return false;
     const n = enriched?.newbot;
     if (!n || !n.present) return false;
     // Kane: New Bot edge must clear before any size — treat watch/clear-ish with edge as cleared; kill/none = no
@@ -2255,8 +2316,22 @@
     function enrichBetGame(g) {
     const trends = computeTrendsLean(g);
     const miles = milesOf(g);
-    const overall = overallVisual(trends, miles);
-    return { g, trends, miles, overall, chart: chartOf(g), newbot: newbotOf(g) };
+    const chart = chartOf(g);
+    const newbot = newbotOf(g);
+    let overall = overallVisual(trends, miles);
+    const conflict = chartNbConflict(g, chart, newbot);
+    // Kane: Chart UL ≠ New Bot lean → gray no-side, 0 units — never invent green
+    if (conflict) {
+      overall = {
+        tint: "gray",
+        label: "no-side",
+        why: conflict.why,
+        branch: conflict.branch,
+        conflict: true,
+        kaneUnits: 0,
+      };
+    }
+    return { g, trends, miles, overall, chart, newbot, conflict };
   }
 
   function renderBetBoard() {
@@ -2303,14 +2378,20 @@
 
     host.innerHTML = rows.map((r) => {
       const g = r.g;
-      const overallLabel = r.overall.tint === "green" ? "green" : r.overall.tint === "amber" ? "watch" : "pass";
-      return `<article class="bet-card overall-${r.overall.tint}">
+      const isConflict = !!(r.conflict || (r.overall && r.overall.branch === "chart_nb_conflict"));
+      const overallLabel = isConflict
+        ? "no-side"
+        : r.overall.tint === "green" ? "green" : r.overall.tint === "amber" ? "watch" : "pass";
+      const faceConflict = isConflict
+        ? `<span class="bet-face-chip gray" title="Chart UL ≠ New Bot lean — Kane 0u">conflict / no-side</span>`
+        : "";
+      return `<article class="bet-card overall-${r.overall.tint}${isConflict ? " bet-conflict-noside" : ""}">
         <div class="bet-card-head">
           <div>
             <div class="matchup">${escapeHtml(g.name)}</div>
             <div class="odds">${escapeHtml(dkLineHtml(g))}</div>
           </div>
-          <span class="bet-overall-badge ${r.overall.tint}">${overallLabel}</span>
+          <div class="bet-card-head-right">${faceConflict}<span class="bet-overall-badge ${r.overall.tint}">${overallLabel}</span></div>
         </div>
         ${renderDecisionStrip(r)}
         ${renderLayerChipsRow(r, showT, showC, showN, showM)}
@@ -2779,6 +2860,24 @@
     };
     if (modeBluff) modeBluff.addEventListener("change", () => { if (modeBluff.checked) onMode("bluff"); });
     if (modeDog) modeDog.addEventListener("change", () => { if (modeDog.checked) onMode("dog"); });
+    const presetDkFavLr = document.getElementById("bluff-preset-dk-fav-lr");
+    if (presetDkFavLr) {
+      presetDkFavLr.addEventListener("click", () => {
+        state.bluffMode = "bluff";
+        state.bluffDkFav = true;
+        state.bluffDkDog = false;
+        state.bluffChartLr = true;
+        syncModeRadios();
+        const f = document.getElementById("bluff-dk-fav");
+        const d = document.getElementById("bluff-dk-dog");
+        const lr = document.getElementById("bluff-chart-lr");
+        if (f) f.checked = true;
+        if (d) d.checked = false;
+        if (lr) lr.checked = true;
+        renderBetBoard();
+        saveState();
+      });
+    }
     const adv = document.getElementById("advanced-filters");
     if (adv) {
       adv.addEventListener("toggle", () => {
